@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Canadair CL-415 — Simulatore antincendio</title>
+<meta name="description" content="Simulatore 3D realistico del Canadair CL-415: pescaggio sul lago, sgancio sugli incendi, cabina con strumenti funzionanti.">
+<style>
+  :root {
+    --bg: #0d1013;
+    --panel: rgba(12, 15, 18, 0.82);
+    --line: rgba(255, 255, 255, 0.12);
+    --text: #e9ecef;
+    --muted: #9aa4ad;
+    --yellow: #f4b000;
+    --red: #d3202a;
+    --green: #3ccf5a;
+    --amber: #ffb000;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  #app { position: fixed; inset: 0; }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #droplets { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; mix-blend-mode: screen; transition: opacity 0.4s; }
+  #hud { position: absolute; inset: 0; pointer-events: none; display: none; }
+  #messages { position: absolute; top: 14px; left: 14px; width: min(460px, 70vw); display: flex; flex-direction: column; gap: 6px; }
+  .msg { background: var(--panel); border-left: 4px solid #6aa7ff; padding: 7px 12px; border-radius: 4px; font-size: 14px; transition: opacity 1s; }
+  .msg.warn { border-color: var(--amber); }
+  .msg.good { border-color: var(--green); }
+  .msg.drop { border-color: var(--red); font-weight: 700; font-size: 18px; }
+  .msg.fade { opacity: 0; }
+  #warnings { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; color: #ff3b2f; font-weight: 800; font-size: clamp(16px, 2.6vw, 28px); letter-spacing: 1px; text-shadow: 0 0 8px rgba(0,0,0,0.9); animation: blink 0.9s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  #data { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: grid; grid-template-columns: repeat(8, auto); gap: 4px; background: var(--panel); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); font-variant-numeric: tabular-nums; max-width: calc(100vw - 24px); }
+  #data .cell { display: flex; flex-direction: column; min-width: 86px; padding: 2px 6px; }
+  #data .cell span { font-size: 10px; color: var(--muted); letter-spacing: 0.6px; }
+  #data .cell b { font-size: 15px; }
+  #data .cell.warn b { color: var(--amber); }
+  #data .cell.bad b { color: #ff4d3d; }
+  #data .cell.foam b { color: #8fd6ff; }
+  #mapbox { position: absolute; top: 14px; right: 14px; width: 220px; }
+  #minimap { width: 220px; height: 220px; border-radius: 8px; border: 1px solid var(--line); display: block; }
+  #fires { margin-top: 6px; background: var(--panel); border-radius: 8px; padding: 6px 9px; font-size: 12px; border: 1px solid var(--line); }
+  .fz { padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .fz:last-child { border: none; }
+  .fz.attivo b { color: #ff5a3a; } .fz.contenuto b { color: var(--amber); } .fz.spento b { color: var(--green); }
+  .fz.tot { color: var(--muted); }
+  #camlabel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; background: var(--panel); padding: 8px 18px; border-radius: 6px; transition: opacity 0.6s; }
+  #camlabel.fade { opacity: 0; }
+  #debug { position: absolute; left: 10px; bottom: 90px; font: 12px monospace; background: rgba(0,0,0,0.6); padding: 4px 8px; display: none; }
+  .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(10,14,18,0.78), rgba(5,7,9,0.95)); z-index: 10; padding: 16px; }
+  .card { background: #13181d; border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; width: min(640px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .title { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .badge { width: 46px; height: 46px; border-radius: 10px; background: linear-gradient(135deg, var(--yellow) 0 55%, var(--red) 55%); flex: none; }
+  h1 { font-size: clamp(20px, 3.4vw, 28px); margin: 0; letter-spacing: 0.5px; }
+  h2 { font-size: 16px; color: var(--muted); font-weight: 500; margin: 0 0 18px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; letter-spacing: 0.5px; text-transform: uppercase; }
+  select { width: 100%; padding: 10px 12px; border-radius: 8px; background: #0e1216; color: var(--text); border: 1px solid var(--line); font-size: 15px; }
+  .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } #data { grid-template-columns: repeat(4, auto); } #data .cell { min-width: 70px; } #mapbox { width: 150px; } #minimap { width: 150px; height: 150px; } }
+  button { cursor: pointer; font: inherit; }
+  .btn { margin-top: 20px; width: 100%; padding: 14px; border: none; border-radius: 10px; background: linear-gradient(180deg, #f6c21c, #e0a000); color: #1a1406; font-weight: 800; font-size: 17px; letter-spacing: 1px; }
+  .btn.sec { background: #222a31; color: var(--text); font-weight: 600; }
+  .tips { margin-top: 16px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .tips b { color: var(--text); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td.k { white-space: nowrap; color: var(--yellow); font-weight: 700; }
+  #loading .card { text-align: center; }
+  .spinner { width: 46px; height: 46px; margin: 10px auto 14px; border-radius: 50%; border: 4px solid #2a3138; border-top-color: var(--yellow); animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #crash .card { text-align: center; border-color: rgba(211,32,42,0.6); }
+  #crash h1 { color: #ff4d3d; }
+  #touch { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 5; }
+  #tstick { position: absolute; left: 22px; bottom: 26px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); pointer-events: auto; touch-action: none; }
+  #tknob { position: absolute; left: 45px; top: 45px; width: 50px; height: 50px; border-radius: 50%; background: rgba(244,176,0,0.75); }
+  #tthr { position: absolute; right: 26px; bottom: 26px; width: 54px; height: 170px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); pointer-events: auto; touch-action: none; }
+  #tthrknob { position: absolute; left: 4px; right: 4px; height: 22px; margin-bottom: -11px; bottom: 0; border-radius: 6px; background: rgba(244,176,0,0.85); }
+  #tbtns { position: absolute; right: 96px; bottom: 26px; display: grid; grid-template-columns: repeat(3, 64px); gap: 8px; pointer-events: auto; }
+  #tbtns button { height: 46px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: rgba(10,12,14,0.6); color: #fff; font-size: 12px; font-weight: 700; touch-action: none; }
+  #tbtns button.drop { background: rgba(211,32,42,0.8); }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="droplets"></canvas>
+  <div id="hud">
+    <div id="messages"></div>
+    <div id="warnings"></div>
+    <div id="data"></div>
+    <div id="mapbox"><canvas id="minimap" width="440" height="440"></canvas><div id="fires"></div></div>
+    <div id="camlabel" class="fade"></div>
+    <div id="debug"></div>
+  </div>
+
+  <div id="touch">
+    <div id="tstick"><div id="tknob"></div></div>
+    <div id="tthr"><div id="tthrknob"></div></div>
+    <div id="tbtns">
+      <button data-act="drop" class="drop">SGANCIO</button>
+      <button data-act="probes">SONDE</button>
+      <button data-act="camera">VISUALE</button>
+      <button data-act="flapDown">FLAP +</button>
+      <button data-act="flapUp">FLAP −</button>
+      <button data-act="gear">CARRELLO</button>
+      <button data-act="mode">MODO</button>
+      <button data-act="pause">MENU</button>
+      <button data-act="brakes">FRENI</button>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="card">
+      <div class="title"><div class="badge"></div><div><h1>CANADAIR CL-415</h1></div></div>
+      <h2>Simulatore antincendio — pescaggio, sgancio, cabina con strumenti funzionanti</h2>
+      <div class="row">
+        <div>
+          <label for="startSel">Partenza</label>
+          <select id="startSel">
+            <option value="air">In volo sopra il lago</option>
+            <option value="water">In acqua (sul lago)</option>
+            <option value="runway">In pista (aeroporto)</option>
+          </select>
+        </div>
+        <div>
+          <label for="windSel">Vento</label>
+          <select id="windSel">
+            <option value="calm">Calmo</option>
+            <option value="moderate">Moderato</option>
+            <option value="strong">Forte e rafficato</option>
+          </select>
+        </div>
+        <div>
+          <label for="qualitySel">Grafica</label>
+          <select id="qualitySel">
+            <option value="low">Bassa (telefono)</option>
+            <option value="medium">Media</option>
+            <option value="high">Alta (PC potente)</option>
+          </select>
+        </div>
+      </div>
+      <button id="startBtn" class="btn">DECOLLA ▸</button>
+      <div class="tips">
+        <b>Missione:</b> spegni gli incendi sui versanti a sud del lago.<br>
+        <b>Pescaggio:</b> flap 15°, carrello SU, ammara a ~80 kt, tieni l'assetto, premi <b>P</b> (sonde) e dai potenza: 6137 L in circa 12 s.<br>
+        <b>Sgancio:</b> 100-150 ft sopra gli alberi a ~110 kt, <b>SPAZIO</b>. Con <b>M</b> scegli salvo, 2+2, sequenza o 1 porta.<br>
+        <button class="btn sec" data-help type="button">Elenco comandi</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="overlay"><div class="card"><div class="spinner"></div><h1>Preparazione</h1><h2 id="loadStatus">…</h2></div></div>
+
+  <div id="pause" class="overlay">
+    <div class="card">
+      <h1>Pausa</h1>
+      <button id="resumeBtn" class="btn">RIPRENDI</button>
+      <button id="restartBtn" class="btn sec">Ricomincia</button>
+      <button id="menuBtn" class="btn sec">Impostazioni</button>
+      <button class="btn sec" data-help type="button">Comandi</button>
+    </div>
+  </div>
+
+  <div id="help" class="overlay" style="z-index:20">
+    <div class="card">
+      <h1>Comandi</h1>
+      <h2>Tastiera, mouse e gamepad (stick sx = cloche, stick dx = pedaliera, grilletti = manette, A = sgancio, B = sonde)</h2>
+      <table id="helptable"></table>
+      <button id="helpClose" class="btn">CHIUDI</button>
+    </div>
+  </div>
+
+  <div id="crash" class="overlay">
+    <div class="card">
+      <h1>INCIDENTE</h1>
+      <h2 id="crashReason"></h2>
+      <button id="crashBtn" class="btn">RIPARTI (Invio)</button>
+    </div>
+  </div>
+</div>
+<script src="dist/canadair.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "canadair-cl415-sim",
+  "version": "1.0.0",
+  "description": "Simulatore 3D realistico del Canadair CL-415 antincendio nel browser (Three.js)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --minify --format=iife --target=es2020 --outfile=dist/canadair.js",
+    "dev": "esbuild src/main.js --bundle --sourcemap --format=iife --target=es2020 --outfile=dist/canadair.js --watch",
+    "serve": "python3 -m http.server 8080",
+    "test:physics": "node tools/sim-test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/7777dddbe/aereo-sus.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "three": "^0.186.1"
+  }
+}
