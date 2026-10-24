@@ -1,0 +1,20 @@
+import { createRequire } from 'module';
+import path from 'path';
+const require = createRequire(import.meta.url);
+let pw; try { pw = require('playwright'); } catch { pw = require('/opt/node-tools/node_modules/playwright'); }
+const [,, out, w, h] = process.argv;
+const b = await pw.chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const ctx = await b.newContext({ viewport: { width: +w, height: +h }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+const p = await ctx.newPage();
+p.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+await p.goto('file://' + path.resolve('index.html') + '#test');
+await p.screenshot({ path: out + '_menu.png' });
+await p.selectOption('#qualitySel', 'low');
+await p.click('#startBtn');
+await p.waitForFunction(() => window.__cl415 && document.getElementById('loading').style.display === 'none', null, { timeout: 300000 });
+await p.evaluate(() => window.__advance(1.5, 30));
+await p.screenshot({ path: out + '_game.png' });
+await p.tap('#tbtns button[data-act=more]');
+await p.evaluate(() => window.__advance(0.1, 30));
+await p.screenshot({ path: out + '_more.png' });
+await b.close();

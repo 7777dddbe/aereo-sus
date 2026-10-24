@@ -57,7 +57,33 @@
   label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; letter-spacing: 0.5px; text-transform: uppercase; }
   select { width: 100%; padding: 10px 12px; border-radius: 8px; background: #0e1216; color: var(--text); border: 1px solid var(--line); font-size: 15px; }
   .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } #data { grid-template-columns: repeat(4, auto); } #data .cell { min-width: 70px; } #mapbox { width: 150px; } #minimap { width: 150px; height: 150px; } }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+  /* Telefono: HUD minimale (solo velocità, quota, acqua; mappa piccola; niente elenco incendi) */
+  @media (pointer: coarse), (max-width: 760px) {
+    #data { top: 8px; bottom: auto; grid-template-columns: repeat(3, auto); padding: 4px 6px; gap: 0; }
+    #data .cell { display: none; min-width: 64px; padding: 0 6px; }
+    #data .cell:nth-child(1), #data .cell:nth-child(2), #data .cell:nth-child(10) { display: flex; }
+    #data .cell b { font-size: 13px; }
+    #data .cell span { font-size: 9px; }
+    #mapbox { top: 8px; right: 8px; width: 84px; }
+    #minimap { width: 84px; height: 84px; }
+    #fires { display: none; }
+    #messages { top: 8px; left: 8px; width: min(38vw, 220px); gap: 3px; }
+    .msg { font-size: 11px; padding: 4px 8px; }
+    .msg.drop { font-size: 13px; }
+    #messages .msg:nth-child(n+3) { display: none; }
+    #warnings { top: 26%; font-size: 14px; }
+    #camlabel { font-size: 14px; padding: 4px 10px; }
+    .card { padding: 18px 16px; }
+    #data .cell b { white-space: nowrap; }
+  }
+  @media (pointer: coarse) and (orientation: portrait), (max-width: 480px) {
+    #messages { top: 50px; width: min(60vw, 240px); }
+    #messages .msg:nth-child(n+2) { display: none; }
+    #mapbox { width: 72px; }
+    #minimap { width: 72px; height: 72px; }
+    #data .cell { min-width: 52px; padding: 0 4px; }
+  }
   button { cursor: pointer; font: inherit; }
   .btn { margin-top: 20px; width: 100%; padding: 14px; border: none; border-radius: 10px; background: linear-gradient(180deg, #f6c21c, #e0a000); color: #1a1406; font-weight: 800; font-size: 17px; letter-spacing: 1px; }
   .btn.sec { background: #222a31; color: var(--text); font-weight: 600; }
@@ -71,14 +97,19 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   #crash .card { text-align: center; border-color: rgba(211,32,42,0.6); }
   #crash h1 { color: #ff4d3d; }
+  /* Comandi touch: stick a sinistra, manetta a destra, due tasti grandi, il resto nel menu "⋯" */
   #touch { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 5; }
-  #tstick { position: absolute; left: 22px; bottom: 26px; width: 140px; height: 140px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); pointer-events: auto; touch-action: none; }
-  #tknob { position: absolute; left: 45px; top: 45px; width: 50px; height: 50px; border-radius: 50%; background: rgba(244,176,0,0.75); }
-  #tthr { position: absolute; right: 26px; bottom: 26px; width: 54px; height: 170px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); pointer-events: auto; touch-action: none; }
-  #tthrknob { position: absolute; left: 4px; right: 4px; height: 22px; margin-bottom: -11px; bottom: 0; border-radius: 6px; background: rgba(244,176,0,0.85); }
-  #tbtns { position: absolute; right: 96px; bottom: 26px; display: grid; grid-template-columns: repeat(3, 64px); gap: 8px; pointer-events: auto; }
-  #tbtns button { height: 46px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25); background: rgba(10,12,14,0.6); color: #fff; font-size: 12px; font-weight: 700; touch-action: none; }
-  #tbtns button.drop { background: rgba(211,32,42,0.8); }
+  #tstick { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); width: 112px; height: 112px; border-radius: 50%; background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.18); pointer-events: auto; touch-action: none; }
+  #tknob { position: absolute; left: 36px; top: 36px; width: 40px; height: 40px; border-radius: 50%; background: rgba(244,176,0,0.7); }
+  #tthr { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); width: 40px; height: 128px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1.5px solid rgba(255,255,255,0.18); pointer-events: auto; touch-action: none; }
+  #tthrknob { position: absolute; left: 3px; right: 3px; height: 18px; margin-bottom: -9px; bottom: 0; border-radius: 5px; background: rgba(244,176,0,0.85); }
+  #tbtns { position: absolute; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 52px); bottom: max(16px, env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; align-items: flex-end; pointer-events: auto; }
+  #tbtns button, #tmore button { border-radius: 10px; border: 1px solid rgba(255,255,255,0.22); background: rgba(10,12,14,0.55); color: #fff; font-size: 11px; font-weight: 700; touch-action: none; padding: 0; }
+  #tbtns button { width: 58px; height: 44px; }
+  #tbtns button.drop { width: 72px; height: 56px; background: rgba(211,32,42,0.8); font-size: 12px; }
+  #tmore { position: absolute; right: calc(max(16px, env(safe-area-inset-right, 0px)) + 52px); bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 66px); display: none; grid-template-columns: repeat(3, 58px); gap: 6px; pointer-events: auto; }
+  #tmore.open { display: grid; }
+  #tmore button { height: 38px; font-size: 10px; }
 </style>
 </head>
 <body>
@@ -96,16 +127,19 @@
   <div id="touch">
     <div id="tstick"><div id="tknob"></div></div>
     <div id="tthr"><div id="tthrknob"></div></div>
-    <div id="tbtns">
-      <button data-act="drop" class="drop">SGANCIO</button>
-      <button data-act="probes">SONDE</button>
-      <button data-act="camera">VISUALE</button>
+    <div id="tmore">
       <button data-act="flapDown">FLAP +</button>
       <button data-act="flapUp">FLAP −</button>
       <button data-act="gear">CARRELLO</button>
       <button data-act="mode">MODO</button>
-      <button data-act="pause">MENU</button>
+      <button data-act="camera">VISUALE</button>
       <button data-act="brakes">FRENI</button>
+      <button data-act="pause">MENU</button>
+    </div>
+    <div id="tbtns">
+      <button data-act="more">⋯</button>
+      <button data-act="probes">SONDE</button>
+      <button data-act="drop" class="drop">SGANCIO</button>
     </div>
   </div>
 

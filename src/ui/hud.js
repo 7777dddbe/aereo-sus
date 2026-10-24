@@ -275,7 +275,11 @@ export function setupTouch(input, onAction) {
       e.preventDefault();
       const a = b.dataset.act;
       if (a === 'brakes') input.brakes = 1;
-      else onAction(a);
+      else if (a === 'more') $('tmore').classList.toggle('open');
+      else {
+        onAction(a);
+        if (a !== 'drop' && a !== 'probes') $('tmore').classList.remove('open');
+      }
     }, { passive: false });
   }
 }
