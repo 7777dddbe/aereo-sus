@@ -77,7 +77,7 @@ export class FireSystem {
     this.fireAtlas = { texture: this.atlas, rects: this.rects };
 
     this.flames = new ParticleSystem({ max: Math.round(3200 * q), texture: flameTexture(), blending: 'additive', name: 'flames', renderOrder: 8, emissive: 0.0 });
-    this.smoke = new ParticleSystem({ max: Math.round(2600 * Math.max(q, 0.7)), texture: softSprite(128, { power: 1.25, noise: 0.45, seed: 21 }), lit: 1.0, sort: true, name: 'smoke', renderOrder: 9, growth: 0.85 });
+    this.smoke = new ParticleSystem({ max: Math.round(2600 * Math.max(q, 0.7)), texture: softSprite(128, { power: 1.25, noise: 0.45, seed: 21 }), lit: 1.0, sort: true, name: 'smoke', renderOrder: 9, growth: 0.85, nearFade: 1.2 });
     this.embers = new ParticleSystem({ max: Math.round(700 * q), texture: softSprite(32, { power: 2 }), blending: 'additive', name: 'embers', renderOrder: 8 });
     scene.add(this.flames.mesh, this.smoke.mesh, this.embers.mesh);
     this.tick = 0;

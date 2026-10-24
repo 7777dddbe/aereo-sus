@@ -138,18 +138,22 @@ export class Cockpit {
       const bottom = [], top = [], outer = [], center = [];
       for (let y = 0.05; y <= maxY(1.2) + 1e-6; y += 0.05) bottom.push(hullPoint(1.2, { y }, inset, side));
       for (let y = 0.05; y <= maxY(2.02) + 1e-6; y += 0.05) top.push(hullPoint(2.02, { y }, inset, side));
-      for (let s = 1.2; s <= 2.02 + 1e-6; s += 0.05) outer.push(hullPoint(s, { y: maxY(s) }, inset, side));
+      // montante tra parabrezza e finestrino d'angolo (copre entrambi i bordi)
+      for (let s = 1.2; s <= 2.02 + 1e-6; s += 0.05) outer.push(hullPoint(s, { y: maxY(s) + 0.038 }, inset + 0.005, side));
       for (let s = 1.2; s <= 2.02 + 1e-6; s += 0.05) center.push(hullPoint(s, { y: 0.032 }, inset, side));
       tube(bottom, 0.025);
       tube(top, 0.03);
-      tube(outer, 0.04);
+      tube(outer, 0.062);
       tube(center, 0.022);
       // finestrino d'angolo: bordo inferiore e posteriore
       const cb = [], cr = [];
       for (let s = 1.32; s <= 2.04 + 1e-6; s += 0.04) cb.push(hullPoint(s, { h: 2.43 }, inset, side));
       for (let h = 2.43; h <= roofTop(2.04) - 0.04 + 1e-6; h += 0.05) cr.push(hullPoint(2.04, { h }, inset, side));
-      tube(cb, 0.026);
-      tube(cr, 0.03);
+      const ct = [];
+      for (let s = 1.32; s <= 2.04 + 1e-6; s += 0.04) ct.push(hullPoint(s, { h: roofTop(s) - 0.04 }, inset, side));
+      tube(cb, 0.03);
+      tube(cr, 0.034);
+      tube(ct, 0.04);
       // finestrini laterali
       const hTop = (s) => Math.min(roofTop(s) - 0.3, 3.18);
       for (const [s0, s1] of [[2.13, 2.66], [2.74, 3.3]]) {

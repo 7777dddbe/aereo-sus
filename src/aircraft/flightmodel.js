@@ -555,6 +555,9 @@ export class FlightModel {
       t.a.set(0, nf, 0);
       t.r.copy(toBody(3.6, 1.9, 0)).sub(this.cg);
       this._addBodyForce(t.a, t.r, F, M, q);
+      // effetto diedro dell'ala alta (interferenza ala-fusoliera): stabilità laterale
+      const clBeta = -0.11 * (1 - 0.4 * clamp(this.prevCLw - 0.5, 0, 1));
+      M.z -= clBeta * qInf * SPEC.wingArea * SPEC.span * clamp(betaB, -0.5, 0.5);
       o.alpha = alphaB;
       o.beta = betaB;
     } else {

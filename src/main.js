@@ -24,10 +24,17 @@ const tick = () => new Promise((r) => setTimeout(r, 16));
 // modalità di test automatico (#test): niente ciclo continuo, si avanza su richiesta
 const TEST = location.hash.includes('test');
 
+const stored = (k) => {
+  try {
+    return localStorage.getItem('cl415.' + k);
+  } catch (e) {
+    return null; // archiviazione non disponibile (navigazione privata, iframe)
+  }
+};
 const settings = {
-  quality: localStorage.getItem('cl415.quality') || (matchMedia('(pointer: coarse)').matches ? 'low' : 'medium'),
-  start: localStorage.getItem('cl415.start') || 'air',
-  wind: localStorage.getItem('cl415.wind') || 'moderate',
+  quality: stored('quality') || (matchMedia('(pointer: coarse)').matches ? 'low' : 'medium'),
+  start: stored('start') || 'air',
+  wind: stored('wind') || 'moderate',
 };
 try {
   for (const k of ['quality', 'start', 'wind']) $(k + 'Sel').value = settings[k];

@@ -444,7 +444,7 @@ export function buildAirfield(terrain) {
   const cv = makeCanvas(W, Lpx);
   const g = cv.getContext('2d');
   // asfalto con variazioni
-  g.fillStyle = '#3a3a3c';
+  g.fillStyle = '#45433f';
   g.fillRect(0, 0, W, Lpx);
   const rand = rng(77);
   for (let i = 0; i < 26000; i++) {

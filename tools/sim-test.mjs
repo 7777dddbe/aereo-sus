@@ -287,7 +287,21 @@ function waterLanding(sink = 250, gear = false) {
   return `Ammaraggio ${gear ? 'CON CARRELLO ' : ''}(${sink} ft/min): contatto a ${td ? kt(td.v) + ' kt' : '-'}, nz max ${maxNz.toFixed(2)}, arresto (<5kt) in ${stop ? stop.d.toFixed(0) + ' m / ' + stop.t.toFixed(1) + ' s' : '-'} ${ok ? '' : 'CRASH: ' + fm.crash.reason}\n   ${log.slice(0, 12).join(' | ')}`;
 }
 
+function handsOff() {
+  const { fm, sys } = setup('lake');
+  sys.gearDown = false;
+  sys.gearPos = 0;
+  fm.reset(new THREE.Vector3(0, 600, 0), 0, 135 * KT, 'air');
+  sys.engines.forEach((en) => { en.lever = 0.55; en.nh = 92; });
+  sys.elevTrim = 0.1;
+  let maxRoll = 0;
+  const y0 = fm.pos.y;
+  run(fm, 60, () => { fm.ctl.elevator = 0; fm.ctl.aileron = 0; fm.ctl.rudder = 0; maxRoll = Math.max(maxRoll, Math.abs(fm.out.roll)); });
+  return `Mani libere 60 s: rollio max ${(maxRoll * RAD).toFixed(0)}°, rollio finale ${(fm.out.roll * RAD).toFixed(0)}°, quota ${(fm.pos.y - y0).toFixed(0)} m, IAS ${kt(fm.out.ias)}`;
+}
+
 const t0 = Date.now();
+console.log(handsOff());
 console.log(level(180));
 console.log(level(150));
 console.log(level(120));

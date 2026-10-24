@@ -25,6 +25,7 @@ export class ParticleSystem {
     fog = true,
     emissive = 0,
     growth = 0.5, // esponente della crescita della dimensione (0.5 = rapida all'inizio, 1 = lineare)
+    nearFade = 0, // dissolve le particelle grandi vicine alla camera (frazione della dimensione)
   }) {
     this.growth = growth;
     this.max = max;
@@ -67,6 +68,7 @@ export class ParticleSystem {
       emissive: { value: emissive },
       fogColor: { value: new THREE.Color() },
       fogDensity: { value: 0 },
+      nearFade: { value: nearFade },
     };
     const mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -80,6 +82,7 @@ export class ParticleSystem {
         attribute vec4 iCol;
         attribute vec4 iExt;
         uniform float stretch;
+        uniform float nearFade;
         varying vec2 vUv;
         varying vec4 vCol;
         varying float vFogDepth;
@@ -103,6 +106,7 @@ export class ParticleSystem {
           }
           mv.xy += q;
           vFogDepth = -mv.z;
+          if (nearFade > 0.0) vCol.a *= smoothstep(iExt.x * nearFade * 0.25, iExt.x * nearFade, -mv.z);
           gl_Position = projectionMatrix * mv;
           #include <logdepthbuf_vertex>
         }`,

@@ -90,7 +90,7 @@ export class Systems {
     this.scoopPreset = 1.0;
     this.engines = [new Engine(0), new Engine(1)];
     this.elevTrim = 0;
-    this.ailTrim = 0;
+    this.ailTrim = 0.15; // compensa la coppia delle eliche (rotazione concorde)
     this.rudTrim = 0;
     this.parkingBrake = false;
     this.noseSteer = 0;

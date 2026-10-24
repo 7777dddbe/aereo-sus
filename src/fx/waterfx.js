@@ -21,7 +21,7 @@ export class WaterFX {
     // nucleo d'acqua dello sgancio (gocce grosse, allungate lungo la velocità)
     this.drop = new ParticleSystem({ max: Math.round(5000 * q), texture: dropTex, lit: 0.85, stretch: 0.9, name: 'dropCore', renderOrder: 6 });
     // velo di nebulizzazione
-    this.mist = new ParticleSystem({ max: Math.round(2600 * q), texture: mistTex, lit: 0.9, name: 'mist', renderOrder: 7 });
+    this.mist = new ParticleSystem({ max: Math.round(2600 * q), texture: mistTex, lit: 0.9, name: 'mist', renderOrder: 7, nearFade: 1.0 });
     // spruzzi (scafo, sonde, impatti)
     this.spray = new ParticleSystem({ max: Math.round(6000 * q), texture: sprayTex, lit: 0.75, stretch: 0.25, name: 'spray', renderOrder: 6 });
     for (const s of [this.drop, this.mist, this.spray]) scene.add(s.mesh);
@@ -74,9 +74,9 @@ export class WaterFX {
         const brk = 0.05 + Math.pow(R(), 2.2) * (foam ? 0.9 : 0.65);
         this.drop.spawn(P.x + right.x * ox + fwd.x * oz, P.y - 0.1, P.z + right.z * ox + fwd.z * oz, vx, vy, vz, {
           life: 14,
-          size0: 0.5 + R() * 0.4,
-          size1: (foam ? 7 : 5) + R() * 3,
-          alpha: foam ? 0.9 : 0.8,
+          size0: 0.45 + R() * 0.35,
+          size1: (foam ? 5 : 3.2) + R() * 2.2,
+          alpha: foam ? 0.8 : 0.68,
           r: foam ? 0.98 : 0.86, g: foam ? 0.98 : 0.92, b: 0.98,
           drag: brk,
           grav: -9.81,
@@ -92,10 +92,10 @@ export class WaterFX {
     for (let i = 0; i < d.n; i++) {
       const age = d.age[i];
       d.drag[i] = Math.min(d.drag[i] * (1 + dt * 0.9), 1.6);
-      if (age > 0.25 && R() < dt * (0.9 + d.drag[i] * 2.2)) {
+      if (age > 0.3 && R() < dt * (0.025 + d.drag[i] * 0.07) * this.q) {
         const k = i * 3;
-        this.mist.spawn(d.p[k], d.p[k + 1], d.p[k + 2], d.v[k] * 0.4 + wind.x * 0.6, d.v[k + 1] * 0.3, d.v[k + 2] * 0.4 + wind.z * 0.6, {
-          life: 6 + R() * 5, size0: 3 + R() * 3, size1: 14 + R() * 12, alpha: 0.2 + 0.15 * d.user2[i], r: 0.92, g: 0.95, b: 0.98,
+        this.mist.spawn(d.p[k], d.p[k + 1], d.p[k + 2], d.v[k] * 0.35 + wind.x * 0.6, d.v[k + 1] * 0.25, d.v[k + 2] * 0.35 + wind.z * 0.6, {
+          life: 5 + R() * 5, size0: 3 + R() * 2, size1: 12 + R() * 10, alpha: 0.22 + 0.1 * d.user2[i], r: 0.92, g: 0.95, b: 0.98,
           drag: 0.9, grav: -0.5, fadeIn: 0.15, rotV: (R() - 0.5) * 0.3,
         });
       }
@@ -106,9 +106,9 @@ export class WaterFX {
       const x = d.p[k], z = d.p[k + 2];
       const onWater = world.waterHeight(x, z, time) > world.groundHeight(x, z);
       if (!onWater && this.onDeposit) this.onDeposit(x, z, d.user[i], d.user2[i] > 0.5);
-      if (R() < 0.12) {
+      if (R() < 0.05) {
         this.mist.spawn(x, gy + 1.5, z, wind.x * 0.5 + (R() - 0.5) * 4, 1 + R() * 2, wind.z * 0.5 + (R() - 0.5) * 4, {
-          life: 5 + R() * 4, size0: 4, size1: 16 + R() * 10, alpha: 0.28, r: 0.9, g: 0.92, b: 0.94, drag: 0.8, grav: -0.2, fadeIn: 0.1,
+          life: 4 + R() * 4, size0: 3, size1: 10 + R() * 8, alpha: 0.18, r: 0.9, g: 0.92, b: 0.94, drag: 0.8, grav: -0.2, fadeIn: 0.1,
         });
       }
       if (onWater && R() < 0.2) this._splash(x, gy, z, 0.4);
