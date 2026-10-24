@@ -28,8 +28,8 @@
   .msg.warn { border-color: var(--amber); }
   .msg.good { border-color: var(--green); }
   .msg.drop { border-color: var(--red); font-weight: 700; font-size: 18px; }
-  .msg.fade { opacity: 0; }
-  #warnings { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; color: #ff3b2f; font-weight: 800; font-size: clamp(16px, 2.6vw, 28px); letter-spacing: 1px; text-shadow: 0 0 8px rgba(0,0,0,0.9); animation: blink 0.9s steps(2) infinite; }
+  .msg.fade { opacity: 0; transition: opacity 0.5s; }
+  #warnings { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; color: #ff3b2f; font-weight: 800; font-size: clamp(16px, 2.6vw, 28px); letter-spacing: 1px; text-shadow: 0 0 8px rgba(0,0,0,0.9); animation: blink 0.9s steps(2) infinite; transition: opacity 0.5s; }
   @keyframes blink { 50% { opacity: 0.35; } }
   #data { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: grid; grid-template-columns: repeat(8, auto); gap: 4px; background: var(--panel); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); font-variant-numeric: tabular-nums; max-width: calc(100vw - 24px); }
   #data .cell { display: flex; flex-direction: column; min-width: 86px; padding: 2px 6px; }

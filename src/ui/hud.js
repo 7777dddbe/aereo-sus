@@ -58,6 +58,7 @@ export class HUD {
   }
 
   message(text, level = 'info', ttl = 5) {
+    ttl = Math.min(ttl, 2.8); // i messaggi spariscono dopo poco
     const d = document.createElement('div');
     d.className = 'msg ' + level;
     d.textContent = text;
@@ -130,9 +131,14 @@ export class HUD {
     if (w.tanksFull) warns.push('SERBATOI PIENI — RITRARRE LE SONDE');
     if (o.overG > 0) warns.push('SOVRACCARICO ' + o.nz.toFixed(1) + ' g');
     const wt = warns.join('<br>');
+    const nowMs = performance.now();
     if (wt !== this._warnT) {
       this.warnBox.innerHTML = wt;
       this._warnT = wt;
+      this._warnAt = nowMs;
+      this.warnBox.style.visibility = wt ? '' : 'hidden';
+    } else if (wt && nowMs - this._warnAt > 3000) {
+      this.warnBox.style.visibility = 'hidden'; // l'avviso resta nella spia, il testo svanisce
     }
     // mappa
     this._mapTimer += dt;
@@ -247,7 +253,7 @@ export function setupTouch(input, onAction) {
       const y = ((t.clientY - r.top) / r.height) * 2 - 1;
       input.touch.active = true;
       input.touch.x = clamp(x, -1, 1);
-      input.touch.y = clamp(-y, -1, 1);
+      input.touch.y = clamp(y, -1, 1); // asse invertito: su = picchiare, giù = cabrare
       knob.style.transform = `translate(${clamp(x, -1, 1) * 45}px, ${clamp(y, -1, 1) * 45}px)`;
     }
     e.preventDefault();
