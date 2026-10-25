@@ -79,6 +79,10 @@ export class FlightModel {
 
     this.sys = null; // Systems collegato
     this.crash = null;
+    this.assist = true;
+    this.effRudder = 0;
+    this.effTiller = 0;
+    this.effAileron = 0;
     this.damage = 0;
     this.out = this._makeOut();
     this._buildElements();
@@ -347,10 +351,42 @@ export class FlightModel {
 
     // Superfici mobili con limite di velocità
     const c = this.ctl;
-    const elevCmd = (c.elevator >= 0 ? c.elevator * 32 : c.elevator * 22) + sys.elevTrim * 11;
+    // aiuti al pilotaggio (si disattivano con fm.assist = false)
+    const o0 = this.out;
+    let assistRud = 0;
+    let elevCmd = (c.elevator >= 0 ? c.elevator * 32 : c.elevator * 22) + sys.elevTrim * 11;
+    if (this.assist) {
+      // mantenimento della prua su acqua e a terra: se non tocchi i pedali l'aereo va dritto
+      const onSurf = (o0.onWater || o0.onGround) && o0.gs > 2;
+      if (!onSurf || Math.abs(c.rudder) > 0.04 || Math.abs(c.tiller) > 0.04 || this._hdgRef === undefined) this._hdgRef = o0.heading;
+      else {
+        let e = this._hdgRef - o0.heading;
+        e = Math.atan2(Math.sin(e), Math.cos(e));
+        assistRud = clamp((e * 7 - o0.turnRate * 2.2) * clamp(o0.gs / 12, 0, 1), -0.7, 0.7);
+      }
+      // protezione dallo stallo: più ci si avvicina all'incidenza critica, meno cloche a cabrare
+      // si può dare, e vicino allo stallo il muso viene spinto giù
+      if (!o0.onWater && !o0.onGround && o0.ias > 12) {
+        // margine previsto tra 0,7 s (il muso che sale in fretta porta all'incidenza critica)
+        const mDeg = (o0.stallMargin - Math.max(0, this.omega.x) * 0.5) / DEG;
+        if (elevCmd > 0) elevCmd *= clamp((mDeg - 3) / 7, 0, 1);
+        if (mDeg < 5) elevCmd -= (5 - mDeg) * 4;
+      }
+      // velocità di beccheggio limitata (~7°/s): niente impennate brusche
+      elevCmd -= clamp((this.omega.x - 0.12) * 70, 0, 28);
+    }
+    // cloche al centro = ali livellate (smorza il rollio e riporta le ali orizzontali)
+    let assistAil = 0;
+    if (this.assist && Math.abs(o0.roll) < 60 * DEG) {
+      const free = clamp(1 - Math.abs(c.aileron) / 0.12, 0, 1);
+      assistAil = clamp(-o0.roll * 1.6 + this.omega.z * 0.9, -0.6, 0.6) * free;
+    }
+    this.effAileron = clamp(c.aileron + assistAil, -1, 1);
+    this.effRudder = clamp(c.rudder + assistRud, -1, 1);
+    this.effTiller = clamp(c.tiller + assistRud, -1, 1);
     this.surf.elev = approach(this.surf.elev, clamp(elevCmd, -26, 34), 120, dt);
-    this.surf.ail = approach(this.surf.ail, clamp(c.aileron * 27 + sys.ailTrim * 4, -30, 30), 120, dt);
-    this.surf.rud = approach(this.surf.rud, clamp(c.rudder * 30 + sys.rudTrim * 8, -32, 32), 100, dt);
+    this.surf.ail = approach(this.surf.ail, clamp(this.effAileron * 27 + sys.ailTrim * 4, -30, 30), 120, dt);
+    this.surf.rud = approach(this.surf.rud, clamp(this.effRudder * 30 + sys.rudTrim * 8, -32, 32), 100, dt);
     this.surf.flap = sys.flapPos;
 
     const F = t.f.set(0, 0, 0); // forza totale (mondo)
@@ -442,7 +478,7 @@ export class FlightModel {
       const ailLocal = st.ailFrac * ail * (st.side > 0 ? -1 : 1); // positivo = bordo d'uscita giù
       const spoil = st.spoiler * clamp(((st.side > 0 ? 1 : -1) * this.surf.ail - 4) / 14, 0, 1);
       const dCl = st.flapFrac * dClFlap + CLA_WING * 0.42 * ailLocal - 0.45 * spoil;
-      const clmax = (1.6 + 1.0 * st.flapFrac * dClFlap) * st.tipLoss;
+      const clmax = (1.75 + 1.0 * st.flapFrac * dClFlap) * st.tipLoss;
       const clmin = -1.05;
       for (let pass = 0; pass < 2; pass++) {
         let cov = 0;
@@ -858,7 +894,7 @@ export class FlightModel {
       fwd.set(0, 0, -1).applyQuaternion(q);
       if (g.steer) {
         const steerMax = 55 * DEG * clamp(1 - speed / 30, 0.12, 1);
-        const st = clamp(this.ctl.tiller * 1.0 + this.ctl.rudder * 0.25, -1, 1) * steerMax;
+        const st = clamp(this.effTiller * 1.0 + this.effRudder * 0.25, -1, 1) * steerMax;
         sys.noseSteer = st;
         fwd.applyAxisAngle(t_up(q), -st);
       }
