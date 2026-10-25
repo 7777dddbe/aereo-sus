@@ -19,8 +19,10 @@ export const KEYMAP = [
   ['B (tenuto) / Shift+B', 'Freni / freno di stazionamento'],
   ['L', 'Fari di atterraggio'],
   ['C / 1-7', 'Cambia visuale (cabina, inseguimento, orbita, passaggio, sonde, ala, torre)'],
-  ['Mouse (trascina) / rotella', 'Guarda intorno / zoom'],
-  ['Y', 'Cloche col mouse (on/off)'],
+  ['Mouse (muovi)', 'Cloche: su = picchiare, giù = cabrare, lati = rollio (il cerchio al centro è il neutro)'],
+  ['Rotella del mouse', 'Manette + / − (al minimo, in acqua o a terra, continua giù = reverse)'],
+  ['Tasto destro (trascina) / Shift+rotella', 'Guarda intorno / zoom · doppio clic = sguardo avanti'],
+  ['Y', 'Cloche col mouse on/off (spenta: trascina per guardare, rotella = zoom)'],
   ['O', 'Pannello dati on/off'],
   ['H / F1', 'Aiuto'],
   ['Esc', 'Pausa / menu'],
@@ -37,7 +39,13 @@ export class Input {
     this.throttle = 0.0;
     this.reverse = 0;
     this.brakes = 0;
-    this.mouseYoke = false;
+    // sul computer la cloche è il mouse; sui dispositivi touch si usano i comandi a schermo
+    this.mouseYoke = !(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    this.wheelReverse = 0;
+    // la cloche si "aggancia" solo quando il puntatore passa dal centro: evita scatti
+    // all'avvio o dopo la pausa se il mouse è rimasto lontano dal centro
+    this.yokeEngaged = false;
+    this.throttleChanged = 0; // istante dell'ultimo cambio manette con la rotella (per l'HUD)
     this.look = { dx: 0, dy: 0, wheel: 0, dragging: false };
     this.gamepad = null;
     this.touch = { active: false, x: 0, y: 0, throttle: null };
@@ -73,13 +81,16 @@ export class Input {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') return;
+      // con la cloche sul mouse si guarda intorno col tasto destro (o centrale)
+      if (this.mouseYoke && e.button === 0) return;
       this.look.dragging = true;
       this._mouse.x = e.clientX;
       this._mouse.y = e.clientY;
       el.setPointerCapture && el.setPointerCapture(e.pointerId);
     });
     el.addEventListener('pointerup', () => (this.look.dragging = false));
-    el.addEventListener('pointermove', (e) => {
+    // ascoltato sulla finestra: la cloche segue il mouse anche sopra i pannelli dell'HUD
+    window.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'touch') return;
       if (this.look.dragging) {
         this.look.dx += e.clientX - this._mouse.x;
@@ -88,11 +99,22 @@ export class Input {
       this._mouse.x = e.clientX;
       this._mouse.y = e.clientY;
       this._mouseNorm = { x: (e.clientX / window.innerWidth) * 2 - 1, y: (e.clientY / window.innerHeight) * 2 - 1 };
+      if (!this.yokeEngaged && Math.hypot(e.clientX - window.innerWidth / 2, e.clientY - window.innerHeight / 2) < 26) this.yokeEngaged = true;
     });
     el.addEventListener('dblclick', () => this.actions.push('lookReset'));
     el.addEventListener('wheel', (e) => {
-      this.look.wheel += Math.sign(e.deltaY);
       e.preventDefault();
+      if (!this.mouseYoke || e.shiftKey || e.ctrlKey) {
+        this.look.wheel += Math.sign(e.deltaY || e.deltaX);
+        return;
+      }
+      // rotella = manette: ~5% per scatto (anche con touchpad, proporzionale allo scorrimento)
+      const lines = e.deltaMode === 1 ? e.deltaY : e.deltaMode === 2 ? e.deltaY * 20 : e.deltaY / 33;
+      const step = -clamp(lines, -9, 9) * (0.05 / 3);
+      if (step < 0 && this.throttle <= 0) this.wheelReverse = clamp(this.wheelReverse - step * 2, 0, 1);
+      else if (step > 0 && this.wheelReverse > 0) this.wheelReverse = clamp(this.wheelReverse - step * 2, 0, 1);
+      else this.throttle = clamp(this.throttle + step, 0, 1);
+      this.throttleChanged = performance.now();
     }, { passive: false });
     window.addEventListener('gamepadconnected', (e) => {
       this.gamepad = e.gamepad.index;
@@ -121,10 +143,17 @@ export class Input {
     let sx = approach(this.stick.x, tx, rate(tx, this.stick.x), dt);
     let sy = approach(this.stick.y, ty * 0.85, rate(ty, this.stick.y), dt);
     let rd = approach(this.rudder, tr, rate(tr, this.rudder), dt);
-    // cloche col mouse
-    if (this.mouseYoke && this._mouseNorm && !this.look.dragging) {
-      sx = clamp(this._mouseNorm.x * 1.4, -1, 1);
-      sy = clamp(-this._mouseNorm.y * 1.4, -1, 1);
+    // cloche col mouse: posizione rispetto al centro dello schermo, piccola zona morta e
+    // curva morbida al centro (manovre fini) che arriva a fondo corsa verso i bordi.
+    // Mouse in alto = cloche avanti (picchiare), in basso = cloche indietro (cabrare).
+    if (this.mouseYoke && this.yokeEngaged && this._mouseNorm && !this.look.dragging) {
+      const shape = (v) => {
+        const a = Math.max(0, Math.abs(v) * 1.2 - 0.03) / 0.97;
+        const m = clamp(a, 0, 1);
+        return Math.sign(v) * m * (0.35 + 0.65 * m);
+      };
+      if (tx === 0) sx = shape(this._mouseNorm.x);
+      if (ty === 0) sy = shape(this._mouseNorm.y);
     }
     // gamepad
     const gpList = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -170,9 +199,10 @@ export class Input {
       }
     } else {
       this._revHold = 0;
-      this.reverse = approach(this.reverse, 0, 1.5, dt);
+      this.reverse = approach(this.reverse, this.wheelReverse, 1.5, dt);
     }
-    if (!onSurface) this.reverse = 0;
+    if (this.throttle > 0 || down('KeyR')) this.wheelReverse = 0;
+    if (!onSurface) this.reverse = this.wheelReverse = 0;
     this.brakes = down('KeyB') && !this.shift ? 1 : approach(this.brakes, 0, 4, dt);
     // trim continuo
     this.trimRate = (down('KeyT') ? (this.shift ? -1 : 1) : 0);

@@ -155,6 +155,7 @@ async function build() {
   load.style.display = 'none';
   $('hud').style.display = 'block';
   hud.message('Benvenuto a bordo del CL-415. Premi H per i comandi.', 'info', 8);
+  if (input.mouseYoke) hud.message('🖱️ Porta il mouse nel cerchio al centro per prendere la cloche · rotella = manette · tasto destro = guardati intorno', 'info', 8);
   hud.message('Incendi attivi sui versanti a sud del lago: guarda la mappa in alto a destra.', 'warn', 10);
   hud.setCamera(rig.mode);
   window.addEventListener('resize', onResize);
@@ -189,6 +190,8 @@ function restart(mode) {
   sys.fuel = 2300;
   input.throttle = 0;
   input.reverse = 0;
+  input.wheelReverse = 0;
+  input.yokeEngaged = false;
   input.stick.x = input.stick.y = 0;
   input.rudder = 0;
   const L = WORLD.lake;
@@ -249,7 +252,7 @@ function handleAction(a) {
     case 'help': togglePanel('help'); break;
     case 'pause': togglePause(); break;
     case 'lookReset': rig.lookReset(); break;
-    case 'mouseYoke': input.mouseYoke = !input.mouseYoke; hud.message('Cloche col mouse: ' + (input.mouseYoke ? 'ATTIVA' : 'DISATTIVA')); break;
+    case 'mouseYoke': input.mouseYoke = !input.mouseYoke; input.yokeEngaged = false; hud.message('Cloche col mouse: ' + (input.mouseYoke ? 'ATTIVA' : 'DISATTIVA')); break;
     case 'gamepad': hud.message('Gamepad collegato', 'good'); break;
     case 'restart': if (fm.crash) restart(settings.start); break;
     case 'trimUpPulse': sys.elevTrim = clamp(sys.elevTrim + 0.05, -1, 1); break;
@@ -269,6 +272,7 @@ function togglePanel(id) {
 }
 function togglePause() {
   G.paused = !G.paused;
+  G.input.yokeEngaged = false;
   $('pause').style.display = G.paused ? 'flex' : 'none';
   if (G.paused && audio.ctx) audio.ctx.suspend();
   else if (audio.ctx) audio.ctx.resume();

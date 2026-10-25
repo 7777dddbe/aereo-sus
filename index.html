@@ -47,6 +47,13 @@
   .fz.tot { color: var(--muted); }
   #camlabel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; background: var(--panel); padding: 8px 18px; border-radius: 6px; transition: opacity 0.6s; }
   #camlabel.fade { opacity: 0; }
+  #myoke { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border: 1.5px solid rgba(255,255,255,0.28); border-radius: 50%; display: none; }
+  #myoke::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,0.45); }
+  #myoke.wait { border-color: #f4b000; border-width: 2.5px; animation: yokewait 1s ease-in-out infinite; }
+  @keyframes yokewait { 50% { transform: scale(1.35); } }
+  #thrpop { position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%); background: var(--panel); padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 15px; opacity: 0; transition: opacity 0.4s; }
+  #thrpop.show { opacity: 1; transition: none; }
+  canvas.myoke { cursor: crosshair; }
   #debug { position: absolute; left: 10px; bottom: 90px; font: 12px monospace; background: rgba(0,0,0,0.6); padding: 4px 8px; display: none; }
   .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(10,14,18,0.78), rgba(5,7,9,0.95)); z-index: 10; padding: 16px; }
   .card { background: #13181d; border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; width: min(640px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
@@ -121,6 +128,8 @@
     <div id="data"></div>
     <div id="mapbox"><canvas id="minimap" width="440" height="440"></canvas><div id="fires"></div></div>
     <div id="camlabel" class="fade"></div>
+    <div id="myoke"></div>
+    <div id="thrpop"></div>
     <div id="debug"></div>
   </div>
 

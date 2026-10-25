@@ -89,6 +89,28 @@ export class HUD {
       dr.style.opacity = op.toFixed(2);
       this._wet = op;
     }
+    // cloche col mouse: cerchio del neutro al centro e manette mostrate quando si usa la rotella
+    if (this._myoke !== input.mouseYoke) {
+      this._myoke = input.mouseYoke;
+      $('myoke').style.display = input.mouseYoke ? 'block' : 'none';
+      const cv = document.querySelector('canvas');
+      if (cv) cv.classList.toggle('myoke', input.mouseYoke);
+    }
+    const wait = input.mouseYoke && !input.yokeEngaged;
+    if (wait !== this._yokeWait) {
+      this._yokeWait = wait;
+      $('myoke').classList.toggle('wait', wait);
+    }
+    const tp = $('thrpop');
+    const recent = performance.now() - input.throttleChanged < 1200;
+    if (recent) {
+      const txt = input.wheelReverse > 0 ? `↩️ REVERSE ${Math.round(input.wheelReverse * 100)}%` : `⚡ MANETTE ${Math.round(input.throttle * 100)}%`;
+      if (tp.textContent !== txt) tp.textContent = txt;
+    }
+    if (recent !== this._thrShown) {
+      this._thrShown = recent;
+      tp.classList.toggle('show', recent);
+    }
     this._dataTimer += dt;
     if (this._dataTimer > 0.1 && this.showData) {
       this._dataTimer = 0;

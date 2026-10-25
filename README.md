@@ -16,10 +16,14 @@ Pesca l'acqua dal lago, vola sugli incendi e sgancia. Tutto è generato dal codi
 
 | Tasto | Azione |
 |---|---|
+| 🖱️ **Mouse** | **Cloche**: porta il puntatore nel cerchio al centro per prenderla, poi su = picchiare, giù = cabrare, lati = rollio |
+| 🖱️ **Rotella** | **Manette** + / − (al minimo, in acqua o a terra, continua giù = reverse) |
+| 🖱️ **Tasto destro** (trascina) · **Shift+rotella** | Guardati intorno · zoom |
 | **W / S** (↑ / ↓) | Cloche avanti / indietro |
 | **A / D** (← / →) | Alettoni |
 | **Q / E** | Pedaliera (timone + ruotino) |
 | **R / F** | Manette + / − (F tenuto al minimo in acqua = reverse) |
+| **Y** | Cloche col mouse on/off |
 | **V / Shift+V** | Flap giù / su (0-10-15-25°) |
 | **G** | Carrello anfibio |
 | **P** | Sonde di pescaggio |
