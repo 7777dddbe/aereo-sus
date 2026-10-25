@@ -148,12 +148,13 @@ export class Input {
     // Mouse in alto = cloche avanti (picchiare), in basso = cloche indietro (cabrare).
     if (this.mouseYoke && this.yokeEngaged && this._mouseNorm && !this.look.dragging) {
       const shape = (v) => {
-        const a = Math.max(0, Math.abs(v) * 1.2 - 0.03) / 0.97;
-        const m = clamp(a, 0, 1);
-        return Math.sign(v) * m * (0.35 + 0.65 * m);
+        // fondo corsa a ~45% della metà schermo; a metà corsa già il 65% del comando
+        const m = clamp((Math.abs(v) * 2.2 - 0.04) / 0.96, 0, 1);
+        return Math.sign(v) * m * (1.6 - 0.6 * m);
       };
-      if (tx === 0) sx = shape(this._mouseNorm.x);
-      if (ty === 0) sy = shape(this._mouseNorm.y);
+      // leggero filtro: niente scatti ma risposta pronta
+      if (tx === 0) sx = approach(this.stick.x, shape(this._mouseNorm.x), 14, dt);
+      if (ty === 0) sy = approach(this.stick.y, shape(this._mouseNorm.y), 14, dt);
     }
     // gamepad
     const gpList = navigator.getGamepads ? navigator.getGamepads() : [];

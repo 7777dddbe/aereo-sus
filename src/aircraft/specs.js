@@ -28,7 +28,7 @@ export const SPEC = {
   maxAfterScoop: 21319,
 
   // Motori PW123AF + eliche Hamilton Standard 14SF-19
-  enginePower: 1775e3, // W (2380 shp) al decollo
+  enginePower: 2000e3, // W (2380 shp) al decollo
   propDiameter: 3.97,
   propRPM: 1200,
   propBlades: 4,

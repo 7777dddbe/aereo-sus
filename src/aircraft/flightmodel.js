@@ -23,7 +23,7 @@ const CLA_HT = 4.3;
 const CLA_VT = 3.0;
 const PROP_AREA = Math.PI * (SPEC.propDiameter / 2) ** 2;
 const PROP_OMEGA = (SPEC.propRPM / 60) * 2 * Math.PI;
-const T_STATIC_MAX = 30500; // N per motore
+const T_STATIC_MAX = 34000; // N per motore
 const PROP_ETA = 0.86;
 const PROP_INERTIA = 95; // kg m²
 
@@ -347,10 +347,10 @@ export class FlightModel {
 
     // Superfici mobili con limite di velocità
     const c = this.ctl;
-    const elevCmd = (c.elevator >= 0 ? c.elevator * 26 : c.elevator * 17) + sys.elevTrim * 11;
-    this.surf.elev = approach(this.surf.elev, clamp(elevCmd, -20, 28), 70, dt);
-    this.surf.ail = approach(this.surf.ail, clamp(c.aileron * 18 + sys.ailTrim * 4, -20, 20), 70, dt);
-    this.surf.rud = approach(this.surf.rud, clamp(c.rudder * 25 + sys.rudTrim * 8, -27, 27), 60, dt);
+    const elevCmd = (c.elevator >= 0 ? c.elevator * 32 : c.elevator * 22) + sys.elevTrim * 11;
+    this.surf.elev = approach(this.surf.elev, clamp(elevCmd, -26, 34), 120, dt);
+    this.surf.ail = approach(this.surf.ail, clamp(c.aileron * 27 + sys.ailTrim * 4, -30, 30), 120, dt);
+    this.surf.rud = approach(this.surf.rud, clamp(c.rudder * 30 + sys.rudTrim * 8, -32, 32), 100, dt);
     this.surf.flap = sys.flapPos;
 
     const F = t.f.set(0, 0, 0); // forza totale (mondo)
@@ -556,7 +556,7 @@ export class FlightModel {
       t.r.copy(toBody(3.6, 1.9, 0)).sub(this.cg);
       this._addBodyForce(t.a, t.r, F, M, q);
       // effetto diedro dell'ala alta (interferenza ala-fusoliera): stabilità laterale
-      const clBeta = -0.11 * (1 - 0.4 * clamp(this.prevCLw - 0.5, 0, 1));
+      const clBeta = -0.07 * (1 - 0.4 * clamp(this.prevCLw - 0.5, 0, 1));
       M.z -= clBeta * qInf * SPEC.wingArea * SPEC.span * clamp(betaB, -0.5, 0.5);
       o.alpha = alphaB;
       o.beta = betaB;
