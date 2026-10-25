@@ -237,6 +237,7 @@ function handleAction(a) {
   switch (a) {
     case 'flapDown': sys.setFlaps(1); audio.click(900, 0.06, 0.3); break;
     case 'flapUp': sys.setFlaps(-1); audio.click(900, 0.06, 0.3); break;
+    case 'flapCycle': sys.cycleFlaps(); audio.click(900, 0.06, 0.3); break;
     case 'gear': sys.toggleGear(fm); audio.click(600, 0.08, 0.4); break;
     case 'probes': sys.toggleProbes(fm); audio.click(1200, 0.05, 0.3); break;
     case 'drop': sys.drop(); audio.click(2000, 0.03, 0.4); break;

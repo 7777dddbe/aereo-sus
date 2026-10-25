@@ -8,7 +8,7 @@ export const KEYMAP = [
   ['Q / E', 'Pedaliera (timone e ruotino)'],
   ['R / F', 'Manette + / − (F tenuto al minimo in acqua o a terra = reverse)'],
   ['Shift+R / Shift+F', 'Potenza massima / minimo'],
-  ['V / Shift+V', 'Flap giù / su (0-10-15-25°)'],
+  ['V', 'Flap: scende 0-10-15-25°, poi risale 25-15-10-0° (Shift+V = sempre su)'],
   ['G', 'Carrello (anfibio)'],
   ['P', 'Sonde di pescaggio (estendi / ritrai)'],
   ['SPAZIO', 'SGANCIO dell\'acqua'],
@@ -56,7 +56,7 @@ export class Input {
   _bind() {
     const shiftActs = { KeyR: 'thrMax', KeyF: 'thrIdle', KeyV: 'flapUp', KeyB: 'parking' };
     const acts = {
-      KeyV: 'flapDown', BracketRight: 'flapDown', BracketLeft: 'flapUp', KeyG: 'gear', KeyP: 'probes', Space: 'drop',
+      KeyV: 'flapCycle', BracketRight: 'flapDown', BracketLeft: 'flapUp', KeyG: 'gear', KeyP: 'probes', Space: 'drop',
       KeyM: 'mode', KeyN: 'preset', KeyJ: 'foam', KeyL: 'lights', KeyC: 'camera', KeyO: 'hud', KeyH: 'help', F1: 'help',
       Escape: 'pause', Enter: 'restart', KeyY: 'mouseYoke', KeyK: 'debug',
     };

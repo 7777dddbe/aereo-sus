@@ -24,7 +24,7 @@ Pesca l'acqua dal lago, vola sugli incendi e sgancia. Tutto è generato dal codi
 | **Q / E** | Pedaliera (timone + ruotino) |
 | **R / F** | Manette + / − (F tenuto al minimo in acqua = reverse) |
 | **Y** | Cloche col mouse on/off |
-| **V / Shift+V** | Flap giù / su (0-10-15-25°) |
+| **V** | Flap: scende 0→10→15→25°, poi risale 25→15→10→0° (Shift+V = sempre su) |
 | **G** | Carrello anfibio |
 | **P** | Sonde di pescaggio |
 | **SPAZIO** | 💧 Sgancio |

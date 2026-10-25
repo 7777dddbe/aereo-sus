@@ -132,6 +132,15 @@ export class Systems {
       this.emit('flaps', `Flap ${SPEC.flapDetents[ni]}°`);
     }
   }
+  // tasto unico: scende 0→10→15→25, poi risale 25→15→10→0 e così via
+  cycleFlaps() {
+    const n = SPEC.flapDetents.length;
+    if (this.flapIndex >= n - 1) this.flapDir = -1;
+    else if (this.flapIndex <= 0) this.flapDir = 1;
+    else if (!this.flapDir) this.flapDir = 1;
+    this.flapIndex += this.flapDir;
+    this.emit('flaps', `Flap ${SPEC.flapDetents[this.flapIndex]}° ${this.flapDir > 0 ? '▼ giù' : '▲ su'}`);
+  }
   toggleGear(fm) {
     if (this.gearDown && fm && (fm.out.onGround)) {
       this.emit('warn', 'Carrello bloccato: aereo a terra (sicurezza WOW)', 'caution');
