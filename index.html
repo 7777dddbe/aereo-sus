@@ -47,6 +47,17 @@
   .fz.tot { color: var(--muted); }
   #camlabel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; background: var(--panel); padding: 8px 18px; border-radius: 6px; transition: opacity 0.6s; }
   #camlabel.fade { opacity: 0; }
+  #mpBox { display: none; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+  #mpBox .mphead { font-weight: 700; margin-bottom: 8px; }
+  #mpBox .mphead small { font-weight: 400; color: var(--muted); }
+  #mpBox input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.07); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; font: inherit; }
+  #mpBox .btn { margin-top: 10px; }
+  #mpStatus { margin-top: 8px; font-size: 12.5px; color: var(--muted); min-height: 1.4em; }
+  #mpbar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: var(--panel); padding: 4px 12px; border-radius: 14px; font-size: 12.5px; font-weight: 600; display: none; white-space: nowrap; }
+  #swapBtn { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); display: none; pointer-events: auto; padding: 12px 20px; font-size: 15px; width: auto; }
+  #swapPrompt { position: fixed; left: 50%; top: 56px; transform: translateX(-50%); display: none; gap: 10px; align-items: center; background: var(--panel); border: 1px solid var(--line); padding: 10px 14px; border-radius: 10px; z-index: 30; font-size: 14px; flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+  #swapPrompt .btn { width: auto; padding: 8px 16px; margin: 0; }
+  #fade { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.22s; z-index: 25; }
   #myoke { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border: 1.5px solid rgba(255,255,255,0.28); border-radius: 50%; display: none; }
   #myoke::after { content: ''; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: rgba(255,255,255,0.45); }
   #myoke.wait { border-color: #f4b000; border-width: 2.5px; animation: yokewait 1s ease-in-out infinite; }
@@ -128,6 +139,8 @@
     <div id="data"></div>
     <div id="mapbox"><canvas id="minimap" width="440" height="440"></canvas><div id="fires"></div></div>
     <div id="camlabel" class="fade"></div>
+    <div id="mpbar"></div>
+    <button id="swapBtn" class="btn" type="button">🔄 Scambia ruolo</button>
     <div id="myoke"></div>
     <div id="thrpop"></div>
     <div id="debug"></div>
@@ -183,6 +196,24 @@
         </div>
       </div>
       <button id="startBtn" class="btn">DECOLLA ▸</button>
+      <div id="mpBox">
+        <div class="mphead">👥 Multiplayer a due <small>(pilota + copilota)</small></div>
+        <div class="row">
+          <div>
+            <label for="mpCode">Codice stanza</label>
+            <input id="mpCode" type="text" maxlength="24" autocomplete="off" spellcheck="false" value="canadair">
+          </div>
+          <div>
+            <label for="mpRole">Se crei tu la partita</label>
+            <select id="mpRole">
+              <option value="p">Io sono il PILOTA</option>
+              <option value="c">Io sono il COPILOTA</option>
+            </select>
+          </div>
+        </div>
+        <button id="mpBtn" class="btn sec" type="button">ENTRA IN STANZA 👥</button>
+        <div id="mpStatus">Tu e il tuo compagno scrivete lo <b>stesso codice</b> e premete il pulsante. Chi entra per primo crea la partita.</div>
+      </div>
       <div class="tips">
         <b>Missione:</b> spegni gli incendi sui versanti a sud del lago.<br>
         <b>Pescaggio:</b> flap 15°, carrello SU, ammara a ~80 kt, tieni l'assetto, premi <b>P</b> (sonde) e dai potenza: 6137 L in circa 12 s.<br>
@@ -192,6 +223,8 @@
     </div>
   </div>
 
+  <div id="fade"></div>
+  <div id="swapPrompt"><span id="swapText"></span><button id="swapYes" class="btn" type="button">Accetta</button><button id="swapNo" class="btn sec" type="button">Rifiuta</button></div>
   <div id="loading" class="overlay"><div class="card"><div class="spinner"></div><h1>Preparazione</h1><h2 id="loadStatus">…</h2></div></div>
 
   <div id="pause" class="overlay">

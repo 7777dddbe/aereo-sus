@@ -18,6 +18,7 @@ import { CameraRig, CAMS } from './cameras.js';
 import { HUD, setupTouch } from './ui/hud.js';
 import { KT, FT } from './core/constants.js';
 import { clamp, DEG } from './core/math.js';
+import { Multiplayer } from './net/multiplayer.js';
 
 const $ = (id) => document.getElementById(id);
 const tick = () => new Promise((r) => setTimeout(r, 16));
@@ -44,6 +45,129 @@ try {
 
 const audio = new AudioEngine();
 let G = null; // stato globale del gioco
+let mp = null; // multiplayer (null = partita singola)
+let roomApi = null; // capability `room` degli Artifact, se disponibile
+
+// il multiplayer funziona solo dentro un Artifact condiviso (capability `room`)
+try {
+  if (window.claude && window.claude.use) {
+    Promise.race([window.claude.use('room'), new Promise((r) => setTimeout(() => r(null), 6000))])
+      .then((r) => {
+        if (r) {
+          roomApi = r;
+          $('mpBox').style.display = 'block';
+        }
+      })
+      .catch(() => {});
+  }
+} catch (e) {
+  /* nessuna stanza */
+}
+
+$('mpBtn').addEventListener('click', async () => {
+  if (!roomApi || mp) return;
+  const code = ($('mpCode').value || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24);
+  if (!code) {
+    $('mpStatus').textContent = 'Scrivi un codice stanza (lettere e numeri).';
+    return;
+  }
+  try {
+    localStorage.setItem('cl415.mpCode', code);
+    localStorage.setItem('cl415.mpRole', $('mpRole').value);
+  } catch (e) { /* ignora */ }
+  $('mpBtn').disabled = true;
+  $('mpStatus').textContent = 'Connessione alla stanza…';
+  const m = new Multiplayer(roomApi);
+  setupMultiplayer(m);
+  try {
+    const res = await m.join(code, $('mpRole').value, { start: $('startSel').value, wind: $('windSel').value });
+    if (m.full) {
+      $('mpStatus').textContent = 'Stanza piena: ci sono già due piloti.';
+      m.leave();
+      $('mpBtn').disabled = false;
+      return;
+    }
+    mp = m;
+    if (!res.host && res.cfg) {
+      // entro nella partita dell'host: stesse impostazioni di partenza
+      $('startSel').value = res.cfg.start;
+      $('windSel').value = res.cfg.wind;
+      $('mpStatus').textContent = 'Compagno trovato: entro nella sua partita…';
+    } else $('mpStatus').textContent = 'Partita creata. Il compagno può entrare con lo stesso codice.';
+    $('startBtn').click();
+  } catch (e) {
+    $('mpStatus').textContent = 'Connessione non riuscita: ' + (e && e.message ? e.message : e);
+    $('mpBtn').disabled = false;
+  }
+});
+try {
+  $('mpCode').value = localStorage.getItem('cl415.mpCode') || 'canadair';
+  $('mpRole').value = localStorage.getItem('cl415.mpRole') || 'p';
+} catch (e) { /* ignora */ }
+
+function setupMultiplayer(m) {
+  m.on('role', (role, was) => onRole(role, was));
+  m.on('action', (name) => {
+    // azioni del compagno: le esegue l'host se il ruolo glielo permette
+    const remoteRole = m.role === 'pilot' ? 'copilot' : m.role === 'copilot' ? 'pilot' : null;
+    if (!remoteRole || name === 'restart' || m.allowed(name, remoteRole) === true) handleAction(name, true);
+  });
+  m.on('restart', () => G && restart(settings.start));
+  m.on('hostEvent', (e) => {
+    if (!G) return;
+    G.hud.message(e.text, e.level === 'caution' ? 'warn' : e.level, e.type === 'drop' ? 2.5 : 5);
+    if (e.type === 'full' || e.type === 'scoopdone') audio.chime(2, 1046);
+    if (e.level === 'caution') audio.chime(1, 880);
+  });
+  m.on('swapRequest', updateSwapUI);
+  m.on('swapDeclined', () => G && G.hud.message('Il compagno ha rifiutato lo scambio', 'warn', 3));
+}
+
+function roleName(r) {
+  return r === 'pilot' ? 'PILOTA' : r === 'copilot' ? 'COPILOTA' : 'SOLO';
+}
+function onRole(role, was) {
+  if (!G) return;
+  const { input, sys, cockpit, hud } = G;
+  input.flight = role !== 'copilot';
+  cockpit.setSeat(role === 'copilot' ? 1 : -1);
+  // chi prende i comandi di volo riparte dalle manette attuali, cloche al centro
+  input.throttle = sys.engines[0].lever;
+  input.reverse = input.wheelReverse = 0;
+  input.yokeEngaged = false;
+  input.stick.x = input.stick.y = 0;
+  input.rudder = 0;
+  G.rig.lookReset();
+  if (role === 'pilot') hud.message('👨‍✈️ Sei il PILOTA (sedile sinistro): cloche, pedali e manette. Flap, carrello, sonde e sgancio li gestisce il copilota.', 'info', 8);
+  else if (role === 'copilot') hud.message('🧑‍✈️ Sei il COPILOTA (sedile destro): carrello (G), flap (V), sonde (P), sgancio (SPAZIO), modo (M), quantità (N), schiuma (J).', 'info', 8);
+  else if (was === 'pilot' || was === 'copilot') hud.message('Il compagno è uscito: ora hai tutti i comandi.', 'warn', 5);
+  const f = $('fade');
+  f.style.opacity = 1;
+  setTimeout(() => (f.style.opacity = 0), 220);
+  updateSwapUI();
+}
+function updateSwapUI() {
+  if (!mp) return;
+  const p = $('swapPrompt');
+  if (mp.pendingIn) {
+    const next = mp.role === 'pilot' ? 'COPILOTA' : 'PILOTA';
+    $('swapText').textContent = `🔄 Il compagno vuole scambiare i ruoli: tu diventeresti ${next}.`;
+    p.style.display = 'flex';
+  } else p.style.display = 'none';
+}
+$('swapYes').addEventListener('click', () => mp && mp.answerSwap(true));
+$('swapNo').addEventListener('click', () => mp && mp.answerSwap(false));
+$('swapBtn').addEventListener('click', () => {
+  if (!mp || !mp.active || mp.sw) return;
+  mp.requestSwap();
+  G && G.hud.message('Richiesta di scambio inviata al compagno…', 'info', 3);
+});
+const requestRestart = () => {
+  if (mp && mp.active && !mp.isHost) {
+    mp.sendAction('restart');
+    G.hud.message('Richiesta di ripartenza inviata all\'host…', 'info', 3);
+  } else restart(settings.start);
+};
 
 $('startBtn').addEventListener('click', async () => {
   settings.quality = $('qualitySel').value;
@@ -158,6 +282,7 @@ async function build() {
   if (input.mouseYoke) hud.message('🖱️ Porta il mouse nel cerchio al centro per prendere la cloche · rotella = manette · tasto destro = guardati intorno', 'info', 8);
   hud.message('Incendi attivi sui versanti a sud del lago: guarda la mappa in alto a destra.', 'warn', 10);
   hud.setCamera(rig.mode);
+  if (mp) onRole(mp.role, 'solo');
   window.addEventListener('resize', onResize);
   G.last = performance.now();
   window.__cl415 = G; // per test e debug
@@ -230,10 +355,28 @@ function restart(mode) {
   G.crashShown = false;
   hud.hideCrash();
   rig.lookReset();
+  if (mp && mp.joined && mp.isHost) mp.bumpEpoch();
 }
 
-function handleAction(a) {
+function handleAction(a, remote = false) {
   const { sys, fm, hud, rig, input } = G;
+  if (mp && mp.active) {
+    if (a === 'restart' && mp.pendingIn) return mp.answerSwap(true);
+    if (a === 'swap') return mp.requestSwap();
+    if (!remote) {
+      const ok = mp.allowed(a);
+      if (ok !== true) {
+        hud.message(ok === 'copilot' ? 'Questo lo gestisce il COPILOTA' : 'Questo lo gestisce il PILOTA', 'warn', 2);
+        return;
+      }
+      // il guest non tocca gli impianti: chiede all'host, lo stato torna con la fotografia
+      if (!mp.isHost && mp.needsHost(a)) {
+        mp.sendAction(a);
+        audio.click(900, 0.06, 0.3);
+        return;
+      }
+    }
+  }
   switch (a) {
     case 'flapDown': sys.setFlaps(1); audio.click(900, 0.06, 0.3); break;
     case 'flapUp': sys.setFlaps(-1); audio.click(900, 0.06, 0.3); break;
@@ -255,9 +398,10 @@ function handleAction(a) {
     case 'lookReset': rig.lookReset(); break;
     case 'mouseYoke': input.mouseYoke = !input.mouseYoke; input.yokeEngaged = false; hud.message('Cloche col mouse: ' + (input.mouseYoke ? 'ATTIVA' : 'DISATTIVA')); break;
     case 'gamepad': hud.message('Gamepad collegato', 'good'); break;
-    case 'restart': if (fm.crash) restart(settings.start); break;
+    case 'restart': if (fm.crash || remote) restart(settings.start); break;
     case 'trimUpPulse': sys.elevTrim = clamp(sys.elevTrim + 0.05, -1, 1); break;
     case 'trimDownPulse': sys.elevTrim = clamp(sys.elevTrim - 0.05, -1, 1); break;
+    case 'swap': break;
     case 'debug': G.debug = !G.debug; $('debug').style.display = G.debug ? 'block' : 'none'; break;
     default:
       if (a.startsWith('cam')) {
@@ -272,6 +416,12 @@ function togglePanel(id) {
   el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
 }
 function togglePause() {
+  // in coppia la simulazione non si ferma: il menu è solo un velo
+  if (mp && mp.active) {
+    const el = $('pause');
+    el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
+    return;
+  }
   G.paused = !G.paused;
   G.input.yokeEngaged = false;
   $('pause').style.display = G.paused ? 'flex' : 'none';
@@ -280,14 +430,14 @@ function togglePause() {
 }
 $('resumeBtn').addEventListener('click', () => togglePause());
 $('restartBtn').addEventListener('click', () => {
-  restart(settings.start);
+  requestRestart();
   togglePause();
 });
 $('menuBtn').addEventListener('click', () => {
   $('pause').style.display = 'none';
   $('menu').style.display = 'flex';
 });
-$('crashBtn').addEventListener('click', () => restart(settings.start));
+$('crashBtn').addEventListener('click', () => requestRestart());
 $('helpClose').addEventListener('click', () => togglePanel('help'));
 for (const el of document.querySelectorAll('[data-help]')) el.addEventListener('click', () => togglePanel('help'));
 
@@ -308,24 +458,37 @@ function frame(now, doRender = true) {
   const onSurface = o.onGround || o.onWater;
   input.update(dt, onSurface);
 
-  // comandi -> aereo
-  fm.ctl.elevator = input.stick.y;
-  fm.ctl.aileron = input.stick.x;
-  fm.ctl.rudder = input.rudder;
-  fm.ctl.tiller = input.rudder;
-  const br = input.brakes;
-  fm.ctl.brakeL = clamp(br * (1 + Math.max(0, -input.rudder) * 0.6 - Math.max(0, input.rudder) * 0.5), 0, 1);
-  fm.ctl.brakeR = clamp(br * (1 + Math.max(0, input.rudder) * 0.6 - Math.max(0, -input.rudder) * 0.5), 0, 1);
-  for (const e of sys.engines) {
-    e.lever = input.throttle;
-    e.reverseLever = input.reverse;
+  // comandi di volo: i miei (pilota o partita singola) oppure quelli del compagno pilota
+  let cmd = { x: input.stick.x, y: input.stick.y, rudder: input.rudder, throttle: input.throttle, brakes: input.brakes, trimRate: input.trimRate, reverse: input.reverse };
+  if (mp && mp.joined) {
+    // il menu di pausa in coppia è un velo: la cloche resta al centro
+    input.hold = $('pause').style.display === 'flex' || (mp.active && g.swapVisible);
+    const remote = mp.update(dt, { ctl: cmd, head: rig.head, fm, sys });
+    if (mp.active && mp.role === 'copilot') {
+      cmd = remote || { x: 0, y: 0, rudder: 0, throttle: sys.engines[0].lever, brakes: 0, trimRate: 0, reverse: 0 };
+    }
+    mpUI(dt, g);
   }
-  sys.elevTrim = clamp(sys.elevTrim + input.trimRate * dt * 0.12, -1, 1);
+  fm.ctl.elevator = cmd.y;
+  fm.ctl.aileron = cmd.x;
+  fm.ctl.rudder = cmd.rudder;
+  fm.ctl.tiller = cmd.rudder;
+  const br = cmd.brakes;
+  fm.ctl.brakeL = clamp(br * (1 + Math.max(0, -cmd.rudder) * 0.6 - Math.max(0, cmd.rudder) * 0.5), 0, 1);
+  fm.ctl.brakeR = clamp(br * (1 + Math.max(0, cmd.rudder) * 0.6 - Math.max(0, -cmd.rudder) * 0.5), 0, 1);
+  for (const e of sys.engines) {
+    e.lever = cmd.throttle;
+    e.reverseLever = cmd.reverse;
+  }
+  sys.elevTrim = clamp(sys.elevTrim + cmd.trimRate * dt * 0.12, -1, 1);
   if (g.autopilot) g.autopilot(dt, g); // usato dai test automatici
 
   fm.update(dt);
+  if (mp && mp.active && !mp.isHost) mp.follow(dt, fm, sys);
 
-  // eventi degli impianti
+  // eventi degli impianti (in coppia l'host li inoltra al compagno, che non mostra i propri)
+  if (mp && mp.active && mp.isHost) mp.noteEvents(sys.events);
+  if (mp && mp.active && !mp.isHost) sys.events.length = 0;
   for (const ev of sys.events) {
     const lvl = ev.level === 'caution' ? 'warn' : ev.level;
     hud.message(ev.text, lvl, ev.type === 'drop' ? 2.5 : 5);
@@ -353,6 +516,7 @@ function frame(now, doRender = true) {
   const inside = rig.inside;
   cockpit.group.visible = inside;
   model.setInterior(inside);
+  if (mp && mp.joined) cockpit.setPeer(mp.active && inside ? mp.peerView() : null);
   if (inside) cockpit.update(dt, fm, sys, g.time);
 
   // telecamera
@@ -401,6 +565,31 @@ function frame(now, doRender = true) {
   if (g.debug) {
     const info = renderer.info;
     $('debug').textContent = `fps ${(1 / Math.max(dt, 1e-3)).toFixed(0)} | draw ${info.render.calls} | tri ${(info.render.triangles / 1e6).toFixed(2)}M | part ${JSON.stringify(fx.stats())} | alpha ${(o.alpha / DEG).toFixed(1)} beta ${(o.beta / DEG).toFixed(1)} | wet ${o.wetLength.toFixed(1)} depth ${o.hullDepth.toFixed(2)} | scoop ${o.scoopRate.toFixed(0)} L/s`;
+  }
+}
+
+// interfaccia della coppia: ruolo, pulsante di scambio quando si guarda il compagno
+function mpUI(dt, g) {
+  const { rig, input } = g;
+  g._mpT = (g._mpT || 0) + dt;
+  const looking = mp.active && rig.inside && (mp.role === 'pilot' ? rig.head.tyaw < -0.5 : rig.head.tyaw > 0.5);
+  const show = looking && !mp.pendingIn;
+  if (show !== g.swapVisible) {
+    g.swapVisible = show;
+    $('swapBtn').style.display = show ? 'block' : 'none';
+  }
+  if (show) {
+    const txt = mp.sw ? '⏳ In attesa del compagno…' : `🔄 Scambia ruolo (diventi ${mp.role === 'pilot' ? 'COPILOTA' : 'PILOTA'})`;
+    if ($('swapBtn').textContent !== txt) $('swapBtn').textContent = txt;
+  }
+  if (g._mpT > 0.25) {
+    g._mpT = 0;
+    const bar = $('mpbar');
+    let t;
+    if (!mp.active) t = `👥 Stanza «${mp.code}» · aspetto il compagno… (hai tutti i comandi)`;
+    else t = `👥 Tu: ${roleName(mp.role)} · ${mp.isHost ? 'host' : 'ospite'}${mp.stale > 2.5 ? ' · ⚠️ segnale debole' : ''}`;
+    if (bar.textContent !== t) bar.textContent = t;
+    bar.style.display = 'block';
   }
 }
 

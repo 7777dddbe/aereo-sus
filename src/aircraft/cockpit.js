@@ -47,12 +47,14 @@ export class Cockpit {
     this._seats();
     this._details();
     this._flush();
+    this._avatar();
     this.group.traverse((o) => {
       if (o.isMesh) {
         o.receiveShadow = true;
         o.castShadow = false;
       }
     });
+    this.seat = -1; // -1 = sedile di sinistra (pilota), +1 = destra (copilota)
     this.eye = P(EYE.s, EYE.h, EYE.y);
     // luce di riempimento: simula la luce diffusa che rimbalza in cabina
     const fill = new THREE.PointLight(0xfff0dc, 1.6, 3.2, 1.6);
@@ -984,6 +986,107 @@ export class Cockpit {
     this._box(0.04, 0.25, 0.3, P(3.05, FLOOR + 0.75, -1.06), this.M.black);
   }
 
+  // sedile in cui siede chi guarda (multiplayer): il compagno occupa l'altro
+  setSeat(side) {
+    if (side === this.seat) return;
+    this.seat = side;
+    this.eye = P(EYE.s, EYE.h, side * 0.52);
+  }
+  // vista del compagno: { role: 'pilot'|'copilot', yaw, pitch } oppure null
+  setPeer(view) {
+    this.peerView = view;
+    this.avatar.visible = !!view;
+  }
+
+  // figura umana seduta nel sedile libero: tuta arancione, casco bianco con cuffie
+  _avatar() {
+    const mat = (c, r = 0.85) => new THREE.MeshStandardMaterial({ color: c, roughness: r, envMapIntensity: 0.3 });
+    const suit = mat(0xd8560f), skin = mat(0xc58c66, 0.7), white = mat(0xe9e9e6, 0.4), black = mat(0x151617, 0.6), strap = mat(0x2a2d31);
+    const g = new THREE.Group();
+    g.visible = false;
+    this.avatar = g;
+    this.group.add(g);
+    const add = (geo, m, x, y, z, parent = g) => {
+      const o = new THREE.Mesh(geo, m);
+      o.position.set(x, y, z);
+      parent.add(o);
+      return o;
+    };
+    const torso = add(new THREE.CapsuleGeometry(0.16, 0.3, 6, 14), suit, 0, 0.93, 0.14);
+    torso.scale.set(1.3, 1, 0.78);
+    torso.rotation.x = 0.2;
+    add(new THREE.BoxGeometry(0.34, 0.14, 0.26), suit, 0, 0.52, 0.08);
+    // cinture sul petto
+    for (const sd of [-1, 1]) {
+      const b = add(new THREE.BoxGeometry(0.035, 0.5, 0.01), strap, sd * 0.1, 0.95, -0.05);
+      b.rotation.x = 0.2;
+    }
+    // testa (ruota con lo sguardo)
+    const head = new THREE.Group();
+    head.position.set(0, 1.4, 0.2);
+    g.add(head);
+    this.avatarHead = head;
+    add(new THREE.SphereGeometry(0.093, 18, 14), skin, 0, 0, 0, head);
+    add(new THREE.SphereGeometry(0.108, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), white, 0, 0.012, 0, head);
+    add(new THREE.BoxGeometry(0.16, 0.02, 0.07), black, 0, 0.02, -0.095, head); // visiera
+    for (const sd of [-1, 1]) add(new THREE.CylinderGeometry(0.04, 0.04, 0.03, 14), black, sd * 0.105, -0.01, 0.005, head).rotation.z = Math.PI / 2;
+    const boom = add(new THREE.CylinderGeometry(0.004, 0.004, 0.11, 6), black, 0.09, -0.04, -0.06, head);
+    boom.rotation.x = Math.PI / 2;
+    add(new THREE.SphereGeometry(0.014, 8, 6), black, 0.09, -0.04, -0.115, head);
+    add(new THREE.CylinderGeometry(0.045, 0.055, 0.08, 10), skin, 0, -0.1, 0.01, head);
+    // arti: cilindri unitari orientati ogni fotogramma
+    const limb = (r, m) => {
+      const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 10), m);
+      g.add(o);
+      return o;
+    };
+    this.avatarLimbs = {
+      arm: [[limb(0.05, suit), limb(0.042, suit), add(new THREE.SphereGeometry(0.04, 10, 8), skin, 0, 0, 0)], [limb(0.05, suit), limb(0.042, suit), add(new THREE.SphereGeometry(0.04, 10, 8), skin, 0, 0, 0)]],
+      leg: [[limb(0.085, suit), limb(0.065, suit)], [limb(0.085, suit), limb(0.065, suit)]],
+    };
+    this._tmpA = new THREE.Vector3();
+    this._tmpB = new THREE.Vector3();
+    this._up = new THREE.Vector3(0, 1, 0);
+  }
+  _seg(mesh, a, b) {
+    const d = this._tmpB.copy(b).sub(a);
+    const len = d.length();
+    mesh.position.copy(a).addScaledVector(d, 0.5);
+    mesh.scale.set(1, Math.max(len, 1e-3), 1);
+    mesh.quaternion.setFromUnitVectors(this._up, d.divideScalar(len || 1));
+  }
+  _updateAvatar() {
+    const v = this.peerView;
+    const g = this.avatar;
+    if (!v || !g.visible) return;
+    const side = -this.seat;
+    g.position.copy(P(2.5, FLOOR, side * 0.52));
+    this.avatarHead.rotation.set(v.pitch, v.yaw, 0, 'YXZ');
+    const yk = this.yokes[side < 0 ? 0 : 1];
+    yk.col.updateMatrix();
+    yk.wheel.updateMatrix();
+    const grip = (sd) => new THREE.Vector3(sd * 0.168, 0.14, 0).applyMatrix4(yk.wheel.matrix).applyMatrix4(yk.col.matrix).sub(g.position);
+    const ped = P(2.12, FLOOR + 0.76, 0).sub(g.position);
+    for (const sd of [-1, 1]) {
+      const i = sd < 0 ? 0 : 1;
+      const sh = new THREE.Vector3(sd * 0.23, 1.12, 0.12);
+      // il pilota ha entrambe le mani sul volantino; il copilota la mano interna sul piedistallo
+      const inner = sd === -side;
+      const hand = v.role === 'copilot' && inner ? ped.clone().add(new THREE.Vector3(-sd * 0.0, 0, 0)) : grip(sd);
+      const mid = sh.clone().lerp(hand, 0.5).add(new THREE.Vector3(sd * 0.07, -0.12, 0.04));
+      const [u, f, h] = this.avatarLimbs.arm[i];
+      this._seg(u, sh, mid);
+      this._seg(f, mid, hand);
+      h.position.copy(hand);
+      const hip = new THREE.Vector3(sd * 0.1, 0.55, 0.06);
+      const knee = new THREE.Vector3(sd * 0.11, 0.62, -0.38);
+      const foot = new THREE.Vector3(sd * 0.11, 0.2, -0.72);
+      const [th, sh2] = this.avatarLimbs.leg[i];
+      this._seg(th, hip, knee);
+      this._seg(sh2, knee, foot);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   update(dt, fm, sys, time) {
     const o = fm.out;
@@ -1029,6 +1132,7 @@ export class Cockpit {
       this.hsiDisplay.update({ hdg: Math.round(hdg * 2) / 2, bug: this.hdgBug, crs: this.hdgBug, dev: 0, gs: Math.round(o.gs / KT) });
     }
 
+    this._updateAvatar();
     // comandi
     const c = fm.ctl;
     for (const y of this.yokes) {

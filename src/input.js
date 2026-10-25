@@ -23,6 +23,7 @@ export const KEYMAP = [
   ['Rotella del mouse', 'Manette + / − (al minimo, in acqua o a terra, continua giù = reverse)'],
   ['Tasto destro (trascina) / Shift+rotella', 'Guarda intorno / zoom · doppio clic = sguardo avanti'],
   ['Y', 'Cloche col mouse on/off (spenta: trascina per guardare, rotella = zoom)'],
+  ['X', 'Multiplayer: chiedi al compagno di scambiare i ruoli (o guardalo e usa il pulsante)'],
   ['O', 'Pannello dati on/off'],
   ['H / F1', 'Aiuto'],
   ['Esc', 'Pausa / menu'],
@@ -42,6 +43,7 @@ export class Input {
     // sul computer la cloche è il mouse; sui dispositivi touch si usano i comandi a schermo
     this.mouseYoke = !(window.matchMedia && matchMedia('(pointer: coarse)').matches);
     this.wheelReverse = 0;
+    this.flight = true; // false = copilota: i comandi di volo non sono tuoi
     // la cloche si "aggancia" solo quando il puntatore passa dal centro: evita scatti
     // all'avvio o dopo la pausa se il mouse è rimasto lontano dal centro
     this.yokeEngaged = false;
@@ -58,7 +60,7 @@ export class Input {
     const acts = {
       KeyV: 'flapCycle', BracketRight: 'flapDown', BracketLeft: 'flapUp', KeyG: 'gear', KeyP: 'probes', Space: 'drop',
       KeyM: 'mode', KeyN: 'preset', KeyJ: 'foam', KeyL: 'lights', KeyC: 'camera', KeyO: 'hud', KeyH: 'help', F1: 'help',
-      Escape: 'pause', Enter: 'restart', KeyY: 'mouseYoke', KeyK: 'debug',
+      Escape: 'pause', Enter: 'restart', KeyY: 'mouseYoke', KeyK: 'debug', KeyX: 'swap',
     };
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
@@ -82,7 +84,7 @@ export class Input {
     el.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') return;
       // con la cloche sul mouse si guarda intorno col tasto destro (o centrale)
-      if (this.mouseYoke && e.button === 0) return;
+      if (this.mouseYoke && this.flight && !this.hold && e.button === 0) return;
       this.look.dragging = true;
       this._mouse.x = e.clientX;
       this._mouse.y = e.clientY;
@@ -104,7 +106,7 @@ export class Input {
     el.addEventListener('dblclick', () => this.actions.push('lookReset'));
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      if (!this.mouseYoke || e.shiftKey || e.ctrlKey) {
+      if (!this.mouseYoke || !this.flight || this.hold || e.shiftKey || e.ctrlKey) {
         this.look.wheel += Math.sign(e.deltaY || e.deltaX);
         return;
       }
@@ -133,12 +135,14 @@ export class Input {
     const down = (...c) => c.some((x) => k.has(x));
     // tastiera: escursione progressiva (non digitale), ritorno al centro elastico
     let tx = 0, ty = 0, tr = 0;
-    if (down('KeyA', 'ArrowLeft')) tx -= 1;
-    if (down('KeyD', 'ArrowRight')) tx += 1;
-    if (down('KeyS', 'ArrowDown')) ty += 1;
-    if (down('KeyW', 'ArrowUp')) ty -= 1;
-    if (down('KeyQ')) tr -= 1;
-    if (down('KeyE')) tr += 1;
+    const fl = this.flight;
+    if (!fl) this.stick.x = this.stick.y = this.rudder = 0;
+    if (fl && down('KeyA', 'ArrowLeft')) tx -= 1;
+    if (fl && down('KeyD', 'ArrowRight')) tx += 1;
+    if (fl && down('KeyS', 'ArrowDown')) ty += 1;
+    if (fl && down('KeyW', 'ArrowUp')) ty -= 1;
+    if (fl && down('KeyQ')) tr -= 1;
+    if (fl && down('KeyE')) tr += 1;
     const rate = (t, cur) => (t === 0 ? 3.2 : Math.sign(t) !== Math.sign(cur) && cur !== 0 ? 4 : 1.6);
     let sx = approach(this.stick.x, tx, rate(tx, this.stick.x), dt);
     let sy = approach(this.stick.y, ty * 0.85, rate(ty, this.stick.y), dt);
@@ -146,7 +150,11 @@ export class Input {
     // cloche col mouse: posizione rispetto al centro dello schermo, piccola zona morta e
     // curva morbida al centro (manovre fini) che arriva a fondo corsa verso i bordi.
     // Mouse in alto = cloche avanti (picchiare), in basso = cloche indietro (cabrare).
-    if (this.mouseYoke && this.yokeEngaged && this._mouseNorm && !this.look.dragging) {
+    // `hold`: mentre si guarda il compagno (pulsante scambio) la cloche resta al centro
+    if (this.hold) {
+      sx = approach(this.stick.x, 0, 6, dt);
+      sy = approach(this.stick.y, 0, 6, dt);
+    } else if (fl && this.mouseYoke && this.yokeEngaged && this._mouseNorm && !this.look.dragging) {
       const shape = (v) => {
         // fondo corsa a ~45% della metà schermo; a metà corsa già il 65% del comando
         const m = clamp((Math.abs(v) * 2.2 - 0.04) / 0.96, 0, 1);
@@ -191,8 +199,8 @@ export class Input {
     this.stick.y = sy;
     this.rudder = rd;
     // manette
-    if (down('KeyR') && !this.shift) this.throttle = clamp(this.throttle + dt * 0.45, 0, 1);
-    if (down('KeyF') && !this.shift) {
+    if (fl && down('KeyR') && !this.shift) this.throttle = clamp(this.throttle + dt * 0.45, 0, 1);
+    if (fl && down('KeyF') && !this.shift) {
       if (this.throttle > 0) this.throttle = clamp(this.throttle - dt * 0.45, 0, 1);
       else if (onSurface) {
         this._revHold = (this._revHold || 0) + dt;
@@ -204,9 +212,9 @@ export class Input {
     }
     if (this.throttle > 0 || down('KeyR')) this.wheelReverse = 0;
     if (!onSurface) this.reverse = this.wheelReverse = 0;
-    this.brakes = down('KeyB') && !this.shift ? 1 : approach(this.brakes, 0, 4, dt);
+    this.brakes = fl && down('KeyB') && !this.shift ? 1 : approach(this.brakes, 0, 4, dt);
     // trim continuo
-    this.trimRate = (down('KeyT') ? (this.shift ? -1 : 1) : 0);
+    this.trimRate = fl && down('KeyT') ? (this.shift ? -1 : 1) : 0;
   }
 
   popActions() {

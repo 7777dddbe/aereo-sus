@@ -38,6 +38,20 @@ Pesca l'acqua dal lago, vola sugli incendi e sgancia. Tutto è generato dal codi
 
 🎮 Gamepad e 📱 comandi touch supportati.
 
+## 👥 Multiplayer a due (pilota + copilota)
+
+Funziona dentro l'**Artifact condiviso**: tu e un amico aprite lo stesso link, scrivete lo **stesso codice stanza** nel menu e premete **ENTRA IN STANZA**. Chi entra per primo crea la partita (e sceglie il ruolo).
+
+| Ruolo | Sedile | Cosa fa |
+|---|---|---|
+| 👨‍✈️ **Pilota** | sinistra | Solo volo: cloche, pedali, manette, trim, freni |
+| 🧑‍✈️ **Copilota** | destra | Impianti: carrello **G**, flap **V**, sonde **P**, sgancio **SPAZIO**, modo **M**, quantità **N**, schiuma **J**, fari **L** |
+
+- 🔄 **Scambio ruoli**: guarda il compagno (ruota la testa verso il suo sedile) e premi il pulsante, oppure premi **X**. Lui deve accettare.
+- 🧑 Vedi il compagno seduto nell'altro sedile, con la testa che segue il suo sguardo.
+- ⏸️ In coppia la pausa è solo un menu: l'aereo continua a volare.
+- 🖥️ Funziona solo su un Artifact con la capability `room`; in locale (`index.html`) resta la partita singola.
+
 ## 🌊 Procedure (come quelle vere)
 
 1. **Pescaggio** — flap 15°, carrello **SU** (con carrello giù in acqua si capotta!), ammara a ~80 kt, tieni ~5° di assetto sul redan, premi **P** e dai tutta potenza: 6137 L in circa 12 s su ~430 m. Le sonde si ritraggono da sole alla quantità preselezionata.
@@ -62,6 +76,7 @@ Pesca l'acqua dal lago, vola sugli incendi e sgancia. Tutto è generato dal codi
 src/aircraft/  modello di volo, impianti, modello 3D, livrea, cabina, strumenti
 src/world/     terreno, lago, vegetazione, cielo, incendi
 src/fx/        particelle ed effetti d'acqua
+src/net/       multiplayer (pilota + copilota)
 src/audio/     suoni procedurali
 tools/         banco prova fisica e test automatici con screenshot
 ```

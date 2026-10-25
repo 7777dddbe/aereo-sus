@@ -90,11 +90,12 @@ export class HUD {
       this._wet = op;
     }
     // cloche col mouse: cerchio del neutro al centro e manette mostrate quando si usa la rotella
-    if (this._myoke !== input.mouseYoke) {
-      this._myoke = input.mouseYoke;
-      $('myoke').style.display = input.mouseYoke ? 'block' : 'none';
+    const yokeOn = input.mouseYoke && input.flight;
+    if (this._myoke !== yokeOn) {
+      this._myoke = yokeOn;
+      $('myoke').style.display = input.mouseYoke && input.flight ? 'block' : 'none';
       const cv = document.querySelector('canvas');
-      if (cv) cv.classList.toggle('myoke', input.mouseYoke);
+      if (cv) cv.classList.toggle('myoke', yokeOn);
     }
     const wait = input.mouseYoke && !input.yokeEngaged;
     if (wait !== this._yokeWait) {
