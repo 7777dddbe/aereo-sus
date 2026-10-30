@@ -68,6 +68,7 @@ Funziona dentro l'**Artifact condiviso**: tu e un amico aprite lo stesso link, s
 | **Impianti** | Motori PW123AF con inerzia, 4 serbatoi e portelli (Torricelli), schiuma, carburante, avvisi |
 | **Cabina** | Strumenti funzionanti: orizzonte artificiale, HSI, altimetro, variometro, radioaltimetro, motori, quantità d'acqua, annunciatori; cloche, pedaliera e manette animate |
 | **Incendi** | Si propagano con vento e pendenza; l'acqua li spegne in base ai litri per m²; fumo, fiamme, colonne termiche (turbolenza!) |
+| **Grafica** | Rendering HDR con antialiasing, bloom sui riflessi e sulle fiamme, tonemapping cinematografico, correzione colore, vignettatura, grana di pellicola (qualità media e alta; la bassa è senza post-elaborazione per i telefoni) |
 | **Effetti** | Coda di gallo del pescaggio, spruzzi, scia di schiuma, getto che si frantuma in nebbia, gocce sul parabrezza, audio procedurale |
 
 ## 🗂️ Struttura

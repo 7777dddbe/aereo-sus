@@ -19,6 +19,7 @@ import { HUD, setupTouch } from './ui/hud.js';
 import { KT, FT } from './core/constants.js';
 import { clamp, DEG } from './core/math.js';
 import { Multiplayer } from './net/multiplayer.js';
+import { PostFX } from './fx/post.js';
 
 const $ = (id) => document.getElementById(id);
 const tick = () => new Promise((r) => setTimeout(r, 16));
@@ -207,7 +208,7 @@ async function build() {
   await step('Preparazione del motore grafico…');
   const clip = supportsClipControl();
   const renderer = new THREE.WebGLRenderer({
-    antialias: q !== 'low',
+    antialias: false, // l'antialiasing (MSAA) lo fa il rendering HDR di PostFX
     powerPreference: 'high-performance',
     reverseDepthBuffer: clip,
     logarithmicDepthBuffer: !clip,
@@ -272,7 +273,16 @@ async function build() {
   const hud = new HUD();
   setupTouch(input, (a) => input.actions.push(a));
 
-  G = { renderer, scene, camera, env, terrain, fires, veg, water, model, cockpit, world, fm, sys, fx, input, rig, hud, paused: true, time: 0, crashShown: false, airfield };
+  // post-elaborazione (bloom, colore, grana): solo da qualità media in su
+  let post = null;
+  if (q !== 'low' && !location.hash.includes('nopost')) {
+    try {
+      post = new PostFX(renderer, scene, camera, { quality: q });
+    } catch (e) {
+      post = null; // si torna al rendering diretto
+    }
+  }
+  G = { post, renderer, scene, camera, env, terrain, fires, veg, water, model, cockpit, world, fm, sys, fx, input, rig, hud, paused: true, time: 0, crashShown: false, airfield };
   fires.start();
   restart(settings.start);
   await step('Pronto.');
@@ -301,6 +311,7 @@ function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   water.setSize(window.innerWidth, window.innerHeight, settings.quality);
+  if (G.post) G.post.setSize(window.innerWidth, window.innerHeight);
 }
 
 function restart(mode) {
@@ -450,7 +461,7 @@ function frame(now, doRender = true) {
   const { fm, sys, input, rig, hud, model, cockpit, fx, fires, veg, env, water, camera, renderer } = g;
   for (const a of input.popActions()) handleAction(a);
   if (g.paused) {
-    if (doRender) renderer.render(g.scene, camera);
+    if (doRender) (g.post ? g.post.render(0.016, g.time) : renderer.render(g.scene, camera));
     return;
   }
   g.time += dt;
@@ -561,7 +572,8 @@ function frame(now, doRender = true) {
   if (!doRender) return;
   fx.render(camera, env);
   fires.render(camera, env);
-  renderer.render(g.scene, camera);
+  if (g.post) g.post.render(dt, g.time);
+  else renderer.render(g.scene, camera);
   if (g.debug) {
     const info = renderer.info;
     $('debug').textContent = `fps ${(1 / Math.max(dt, 1e-3)).toFixed(0)} | draw ${info.render.calls} | tri ${(info.render.triangles / 1e6).toFixed(2)}M | part ${JSON.stringify(fx.stats())} | alpha ${(o.alpha / DEG).toFixed(1)} beta ${(o.beta / DEG).toFixed(1)} | wet ${o.wetLength.toFixed(1)} depth ${o.hullDepth.toFixed(2)} | scoop ${o.scoopRate.toFixed(0)} L/s`;

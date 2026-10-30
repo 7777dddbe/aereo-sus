@@ -11,7 +11,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const logs = [];
 page.on('console', (m) => { const t = m.text(); if ((m.type() === 'error' || m.type() === 'warning') && !t.includes('willReadFrequently')) logs.push(m.type() + ': ' + t.slice(0, 300)); });
 page.on('pageerror', (e) => logs.push('PAGEERROR: ' + e.message));
-await page.goto('file://' + path.resolve('index.html') + '#test');
+await page.goto('file://' + path.resolve('index.html') + (process.env.HASH || '#test'));
 await page.selectOption('#qualitySel', quality);
 await page.selectOption('#startSel', start);
 const t0 = Date.now();
