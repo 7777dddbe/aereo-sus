@@ -25,7 +25,7 @@ for (const s of steps) {
   if (s.down) await page.keyboard.down(s.down);
   if (s.up) await page.keyboard.up(s.up);
   if (s.eval) { const r = await page.evaluate(s.eval); if (r !== undefined) console.log('eval:', JSON.stringify(r)); }
-  if (s.shot) { await page.screenshot({ path: path.join(outDir, s.shot + '.png') }); console.log('shot', s.shot); }
+  if (s.shot) { await page.screenshot({ path: path.join(outDir, s.shot + '.png'), timeout: 120000 }); console.log('shot', s.shot); }
 }
 console.log(logs.slice(0, 30).join('\n'));
 await browser.close();

@@ -162,7 +162,7 @@ export class Terrain {
   }
 
   // -------------------------------------------------------------------------
-  buildMesh(fireAtlas) {
+  buildMesh(fireAtlas, overlay = null) {
     const N = this.N, S = WORLD.half;
     const nv = N * N + 4 * N; // griglia + bordo abbassato ("gonna" contro le fessure con l'anello lontano)
     const pos = new Float32Array(nv * 3);
@@ -221,7 +221,7 @@ export class Terrain {
     this.forestGrid = forest;
     geo.computeBoundingSphere();
 
-    const mat = createTerrainMaterial(fireAtlas);
+    const mat = createTerrainMaterial(fireAtlas, overlay);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     mesh.name = 'terrain';
@@ -315,7 +315,7 @@ function terrainTextures() {
   return _terrainTextures;
 }
 
-function createTerrainMaterial(fireAtlas) {
+function createTerrainMaterial(fireAtlas, overlay = null) {
   const { noiseTex, crownNormal } = terrainTextures();
   // immagine Sentinel-2 come colore di base (sRGB)
   const sat = new THREE.Texture(GARDA.satellite);
@@ -332,6 +332,11 @@ function createTerrainMaterial(fireAtlas) {
     tBurn: { value: fireAtlas ? fireAtlas.texture : null },
     burnRects: { value: fireAtlas ? fireAtlas.rects : [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] },
     uTime: { value: 0 },
+    tOvG: { value: overlay ? overlay.global.texture : null },
+    tOvH: { value: overlay ? overlay.hires.texture : null },
+    tOvC: { value: overlay ? overlay.cls.texture : null },
+    ovRectG: { value: overlay ? overlay.rects[0] : new THREE.Vector4(0, 0, 0, 0) },
+    ovRectH: { value: overlay ? overlay.rects[1] : new THREE.Vector4(0, 0, 0, 0) },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
@@ -377,7 +382,13 @@ function createTerrainMaterial(fireAtlas) {
           }
           return r;
         }
+        uniform sampler2D tOvG;
+        uniform sampler2D tOvH;
+        uniform sampler2D tOvC;
+        uniform vec4 ovRectG;
+        uniform vec4 ovRectH;
         float tFor = 0.0;
+        float ovA = 0.0;
         vec4 tBurnV = vec4(0.0);`,
       )
       .replace(
@@ -418,8 +429,39 @@ function createTerrainMaterial(fireAtlas) {
             float tx2 = texture2D(tNoise, vWPos.zy / 7.0).g;
             float tz2 = texture2D(tNoise, vWPos.xy / 7.0).g;
             float tri2 = tx2 * an.x + tz2 * an.z + 0.5 * an.y;
-            vec3 rockC = avg * (0.55 + 0.7 * tri) * (0.85 + 0.3 * tri2);
+            // calcare grigio-bianco del Garda (Monte Brione, Ponale, Baldo) con colature scure
+            vec3 lime = vec3(0.42, 0.41, 0.38) * (0.8 + 0.4 * nB.g);
+            vec3 rockC = mix(avg, lime, 0.5 + 0.4 * smoothstep(0.55, 0.8, slope)) * (0.55 + 0.7 * tri) * (0.82 + 0.36 * tri2);
             col = mix(col, rockC, steep * (1.0 - tFor * 0.5));
+          }
+          // dettagli reali (OSM): strade, campi, spiagge, il Sarca
+          if (ovRectG.w > 0.5 && h > -0.5) {
+            vec2 ug = (p - ovRectG.xy) * ovRectG.z;
+            vec4 og = texture2D(tOvG, vec2(ug.x, 1.0 - ug.y));
+            col = mix(col, og.rgb, og.a);
+            ovA = og.a;
+            vec2 uh = (p - ovRectH.xy) * ovRectH.z;
+            if (uh.x > 0.0 && uh.y > 0.0 && uh.x < 1.0 && uh.y < 1.0) {
+              vec4 oh = texture2D(tOvH, vec2(uh.x, 1.0 - uh.y));
+              float edge = smoothstep(0.0, 0.03, min(min(uh.x, uh.y), min(1.0 - uh.x, 1.0 - uh.y)));
+              col = mix(col, oh.rgb, oh.a * edge);
+              ovA = max(ovA, oh.a * edge);
+              // filari dei vigneti e alberi degli uliveti/frutteti (procedurali, da vicino)
+              vec4 oc = texture2D(tOvC, vec2(uh.x, 1.0 - uh.y));
+              float nearP = (1.0 - smoothstep(600.0, 2600.0, camD)) * edge;
+              if (oc.r > 0.5 && nearP > 0.0) {
+                float a = oc.b * 3.14159265;
+                float u = dot(p, vec2(-sin(a), cos(a)));
+                float row = 1.0 - smoothstep(0.18, 0.32, abs(fract(u / 2.6) - 0.5));
+                vec3 soil = vec3(0.13, 0.105, 0.07), vine = vec3(0.045, 0.075, 0.025);
+                col = mix(col, mix(soil, vine, row), 0.6 * nearP);
+              } else if (oc.g > 0.5 && nearP > 0.0) {
+                vec2 cell = fract(p / 6.0 + vec2(floor(p.y / 6.0) * 0.5, 0.0)) - 0.5;
+                float tree = 1.0 - smoothstep(0.22, 0.32, length(cell));
+                vec3 grassC = vec3(0.09, 0.105, 0.05), crownC = vec3(0.04, 0.065, 0.03);
+                col = mix(col, mix(grassC, crownC, tree), 0.5 * nearP);
+              }
+            }
           }
           // fondale del lago
           col = mix(col, col * 0.45 + vec3(0.012, 0.02, 0.016), 1.0 - smoothstep(-2.5, -0.2, h));
@@ -447,7 +489,7 @@ function createTerrainMaterial(fireAtlas) {
           float fade = 1.0 - smoothstep(1500.0, 5000.0, camD);
           vec3 cn = texture2D(tCrown, vWPos.xz / 23.0).xyz * 2.0 - 1.0;
           vec3 cn2 = texture2D(tCrown, vWPos.xz / 9.0 + 0.5).xyz * 2.0 - 1.0;
-          vec3 bump = vec3(cn.x + cn2.x * 0.5, 0.0, cn.y + cn2.y * 0.5) * tFor * 0.9 * fade * (1.0 - tBurnV.r);
+          vec3 bump = vec3(cn.x + cn2.x * 0.5, 0.0, cn.y + cn2.y * 0.5) * tFor * 0.9 * fade * (1.0 - tBurnV.r) * (1.0 - ovA);
           normal = normalize(normal + (viewMatrix * vec4(bump, 0.0)).xyz);
         }`,
       )

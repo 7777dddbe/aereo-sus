@@ -9,6 +9,7 @@ import { clamp, RAD, rng } from '../core/math.js';
 import { SPEC } from '../aircraft/specs.js';
 import { WORLD, DIR } from '../world/terrain.js';
 import { GARDA } from '../world/garda.js';
+import { OSM } from '../world/osm.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -189,6 +190,25 @@ export class HUD {
       img.data[k * 4 + 3] = 255;
     }
     g.putImageData(img, 0, 0);
+    // strade principali e fiumi reali (OSM)
+    const k = N / (2 * GARDA.meta.half), h = GARDA.meta.half;
+    g.lineCap = 'round';
+    for (const f of OSM.water) {
+      if (!f.flag) continue;
+      g.strokeStyle = '#3f7fae';
+      g.lineWidth = f.cls === 1 ? 1.6 : 0.8;
+      g.beginPath();
+      for (let i = 0; i < f.pts.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, (f.pts[i] + h) * k, (f.pts[i + 1] + h) * k);
+      g.stroke();
+    }
+    for (const f of OSM.roads) {
+      if (f.cls > 7) continue;
+      g.strokeStyle = f.cls <= 3 ? '#f2d38a' : '#d9d4c8';
+      g.lineWidth = f.cls <= 3 ? 1.6 : f.cls <= 5 ? 1.0 : 0.6;
+      g.beginPath();
+      for (let i = 0; i < f.pts.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, (f.pts[i] + h) * k, (f.pts[i + 1] + h) * k);
+      g.stroke();
+    }
     this._base = c;
     return c;
   }

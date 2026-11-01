@@ -20,15 +20,18 @@ Pesca l'acqua dal **Lago di Garda nord** (ricostruito dal vero: Riva, Torbole, L
 | 🌲 Boschi, paesi, prati, roccia, laghi (Garda, Ledro, Tenno) | ESA WorldCover 2021 (10 m) |
 | 🛰️ Colore del terreno | Sentinel-2 L2A del 31/07/2024 (10 m), ombre del satellite attenuate |
 | 🏔️ Orizzonte: Alpi, Brenta, Adamello, Garda sud | anello lontano 80 × 80 km dagli stessi dati |
+| 🏘️ 33.000 edifici con la sagoma vera, strade (senza le gallerie della Gardesana), vigneti, uliveti, spiagge, il Sarca, moli e porti | Overture Maps (release 2026-10-21), dati OpenStreetMap |
 
-- 🏘️ ~15.000 case nei punti in cui il satellite vede costruito, con colori e tetti tipici del lago.
+- 🏘️ Edifici veri (Riva vecchia, la Rocca, la zona industriale, gli alberghi di Torbole) con tetti in coppi; capannoni con tetti piani chiari.
+- 🛣️ Strade e ferrovie disegnate sul terreno, filari dei vigneti e uliveti nella piana del Sarca.
+- ⛵ Barche ormeggiate nei porti, vele e windsurf con l'Ora, traghetti Riva – Limone – Malcesine.
 - 🌳 Alberi dove ci sono boschi veri: lecci e pini vicino al lago, faggi e abeti più in alto, ulivi in campagna.
 - 🛬 La pista è **fittizia**: nella realtà non c'è un aeroporto qui, quindi è nel punto più piano della piana del Sarca, tra Riva e Arco.
 - 🔥 Incendi su Monte Brione, sopra Limone, sul Monte Baldo (Navene) e al Ponale.
 - 💨 Vento: l'"Ora" da sud, tipica dei pomeriggi del Garda.
-- 🔁 Per rigenerare i dati: `npm run garda` (scarica le finestre necessarie da AWS Open Data).
+- 🔁 Per rigenerare i dati: `npm run garda` (terreno, satellite) e `NODE_USE_ENV_PROXY=1 node tools/garda/overture.mjs` (edifici, strade, campi).
 
-**Crediti dei dati**: Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito del programma Copernicus dall'Unione Europea e dall'ESA · © ESA WorldCover project 2021, contiene dati Copernicus Sentinel modificati (2021) elaborati dal consorzio ESA WorldCover (CC BY 4.0) · contiene dati Copernicus Sentinel modificati (2024).
+**Crediti dei dati**: Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito del programma Copernicus dall'Unione Europea e dall'ESA · © ESA WorldCover project 2021, contiene dati Copernicus Sentinel modificati (2021) elaborati dal consorzio ESA WorldCover (CC BY 4.0) · contiene dati Copernicus Sentinel modificati (2024) · edifici, strade, uso del suolo, acque e moli: © OpenStreetMap contributors (ODbL), distribuiti da Overture Maps Foundation.
 
 ## 🎮 Comandi principali
 

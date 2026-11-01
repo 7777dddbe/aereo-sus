@@ -5,6 +5,9 @@ import { Environment } from './world/environment.js';
 import { Terrain, buildAirfield, WORLD, DIR, NRM, lakeCenterAt } from './world/terrain.js';
 import { loadGarda } from './world/garda.js';
 import { Towns } from './world/towns.js';
+import { loadOsm } from './world/osm.js';
+import { DetailOverlay } from './world/overlay.js';
+import { Harbor } from './world/harbor.js';
 import { Vegetation } from './world/vegetation.js';
 import { Water } from './world/water.js';
 import { FireSystem } from './world/fires.js';
@@ -209,7 +212,10 @@ async function build() {
   const load = $('loading');
   const status = $('loadStatus');
   load.style.display = 'flex';
+  let tStep = performance.now();
   const step = async (t) => {
+    if (TEST) console.log(`[carico] ${((performance.now() - tStep) / 1000).toFixed(2)}s prima di: ${t}`);
+    tStep = performance.now();
     status.textContent = t;
     await tick();
   };
@@ -244,12 +250,16 @@ async function build() {
 
   await step('Dati reali del Garda (altitudini, boschi, satellite)…');
   await loadGarda();
+  loadOsm();
   await step('Terreno: Riva, Torbole, Monte Baldo, Valle di Ledro…');
   const terrain = new Terrain({ quality: q });
   await step('Incendi boschivi…');
   const fires = new FireSystem(scene, terrain, env, { quality: q });
   await step('Superficie del terreno…');
-  scene.add(terrain.buildMesh(fires.fireAtlas));
+  await step('Strade, campi, vigneti e uliveti (OpenStreetMap)…');
+  const overlay = new DetailOverlay({ quality: q });
+  terrain.overlay = overlay;
+  scene.add(terrain.buildMesh(fires.fireAtlas, overlay));
   scene.add(terrain.buildFarMesh());
   await step('Aeroporto e rampa idrovolanti…');
   const airfield = buildAirfield(terrain);
@@ -264,6 +274,8 @@ async function build() {
   scene.add(water.buildUpperLakes());
   await step('Paesi: Riva, Arco, Limone, Malcesine…');
   const towns = new Towns(scene, terrain, { quality: q });
+  await step('Porti, moli, barche e traghetti…');
+  const harbor = new Harbor(scene, terrain, { quality: q });
   await step('Canadair CL-415: fusoliera, ali, livrea…');
   const model = new AircraftModel({ quality: q });
   scene.add(model.group);
@@ -298,7 +310,7 @@ async function build() {
       post = null; // si torna al rendering diretto
     }
   }
-  G = { post, renderer, scene, camera, env, terrain, fires, veg, water, model, cockpit, world, fm, sys, fx, input, rig, hud, paused: true, time: 0, crashShown: false, airfield };
+  G = { harbor, towns, post, renderer, scene, camera, env, terrain, fires, veg, water, model, cockpit, world, fm, sys, fx, input, rig, hud, paused: true, time: 0, crashShown: false, airfield };
   fires.start();
   restart(settings.start);
   await step('Pronto.');
@@ -571,6 +583,7 @@ function frame(now, doRender = true) {
   }
   env.update(dt, fm.pos, camera.position);
   water.update(dt, g.time, env);
+  if (g.harbor) g.harbor.update(dt, g.time);
   g.terrain.material.userData.uniforms.uTime.value = g.time;
   const ws = g.airfield.userData.windsock;
   if (ws) {

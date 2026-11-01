@@ -189,6 +189,18 @@ export class Vegetation {
         const z = z0 + gz + (r() - 0.5) * step * 0.9;
         let f = T.forestAt(x, z);
         let olive = false;
+        // dati OSM: niente alberi su strade, case, acqua e spiagge; niente nei vigneti; ulivi negli uliveti
+        const ov = T.overlay;
+        if (ov) {
+          if (ov.maskAt(x, z, 0) > 70 || ov.maskAt(x, z, 2) > 120) continue;
+          if (ov.maskAt(x, z, 1) > 120) {
+            const hh = T.heightAt(x, z);
+            if (hh > 0.5 && hh < 650 && r() < 0.75) {
+              list.push({ x, y: hh - 0.2, z, type: 2, s: 0.45 + r() * 0.2, rot: r() * Math.PI * 2, tint: 1.3 + r() * 0.2, hue: r(), rank: r() });
+            }
+            continue;
+          }
+        }
         if (f <= 0.02) {
           // uliveti e alberi sparsi in campagna e nei giardini, solo in basso (clima del Garda)
           const lc = T.inAirfield(x, z) ? 0 : T.landClassAt(x, z);
