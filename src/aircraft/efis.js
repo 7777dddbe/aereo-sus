@@ -446,3 +446,207 @@ export function drawDropControl(g, w, h, s) {
     g.fillRect(x, h * 0.64, w * 0.1, h * 0.24);
   }
 }
+
+// ---------------------------------------------------------------------------
+// GPS "PROXIMITY WAYPOINTS": elenco dei punti vicini con distanza e rotta
+export function drawGps(g, w, h, s) {
+  bg(g, w, h);
+  g.fillStyle = '#0a1a0c';
+  g.fillRect(4, 4, w - 8, h - 8);
+  g.font = MONO(h * 0.16);
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  g.fillStyle = WHITE;
+  g.fillText('Proximity waypoints', w / 2, h * 0.17);
+  g.font = MONO(h * 0.15);
+  s.list.forEach((p, i) => {
+    const y = h * (0.42 + i * 0.2);
+    g.textAlign = 'left';
+    g.fillStyle = i === 0 ? CYAN : GREEN;
+    g.fillText(p.n, w * 0.04, y);
+    g.textAlign = 'right';
+    g.fillText(`${String(p.b).padStart(3, '0')}° ${p.d.toFixed(1)}NM`, w * 0.97, y);
+  });
+}
+
+// Radar meteo (lato copilota): spazzata a ventaglio, archi di distanza, rilievi del terreno
+export function drawRadar(g, w, h, s) {
+  bg(g, w, h);
+  const cx = w / 2, cy = h * 0.9, R = h * 0.8;
+  g.save();
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.arc(cx, cy, R, -Math.PI / 2 - 1.05, -Math.PI / 2 + 1.05);
+  g.closePath();
+  g.clip();
+  // ritorni del terreno (montagne attorno al lago)
+  for (const r of s.returns) {
+    const a = -Math.PI / 2 + r.a, d = r.d * R;
+    const col = r.i > 0.75 ? '#e03020' : r.i > 0.45 ? '#e8d020' : '#20b040';
+    g.fillStyle = col;
+    g.globalAlpha = 0.85;
+    g.beginPath();
+    g.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 2.5 + r.i * 5, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  // spazzata
+  const sa = -Math.PI / 2 + s.sweep;
+  const grd = g.createLinearGradient(cx, cy, cx + Math.cos(sa) * R, cy + Math.sin(sa) * R);
+  grd.addColorStop(0, 'rgba(60,255,120,0.0)');
+  grd.addColorStop(1, 'rgba(60,255,120,0.35)');
+  g.strokeStyle = grd;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.lineTo(cx + Math.cos(sa) * R, cy + Math.sin(sa) * R);
+  g.stroke();
+  g.restore();
+  g.strokeStyle = 'rgba(120,255,160,0.55)';
+  g.lineWidth = 1.5;
+  for (const k of [0.25, 0.5, 0.75, 1]) {
+    g.beginPath();
+    g.arc(cx, cy, R * k, -Math.PI / 2 - 1.05, -Math.PI / 2 + 1.05);
+    g.stroke();
+  }
+  g.fillStyle = GREEN;
+  g.font = MONO(h * 0.07);
+  g.textAlign = 'left';
+  g.fillText('WX  10NM', 8, h * 0.08);
+  g.textAlign = 'right';
+  g.fillText('GAIN AUTO', w - 8, h * 0.08);
+  g.fillStyle = AMBER;
+  g.beginPath();
+  g.moveTo(cx, cy - 10);
+  g.lineTo(cx - 6, cy + 4);
+  g.lineTo(cx + 6, cy + 4);
+  g.closePath();
+  g.fill();
+}
+
+// Orologio digitale a LED (rosso/arancio): ore:minuti e secondi
+export function drawClockLed(g, w, h, s) {
+  g.fillStyle = '#120706';
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = '#2a1410';
+  g.fillRect(6, 6, w - 12, h * 0.48 - 6);
+  g.fillRect(w * 0.25, h * 0.56, w * 0.5, h * 0.38);
+  g.fillStyle = '#ff8a1a';
+  g.shadowColor = '#ff5a00';
+  g.shadowBlur = 6;
+  g.font = MONO(h * 0.34);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(s.hm, w / 2, h * 0.27);
+  g.font = MONO(h * 0.3);
+  g.fillText(s.ss, w / 2, h * 0.75);
+  g.shadowBlur = 0;
+}
+
+// Indicatore di incidenza (AOA) sul glareshield: arco verde/giallo/rosso
+export function drawAoa(g, w, h, s) {
+  const cx = w / 2, cy = h / 2, R = w * 0.46;
+  g.fillStyle = '#0c0c0c';
+  g.beginPath();
+  g.arc(cx, cy, R, 0, Math.PI * 2);
+  g.fill();
+  const arc = (a0, a1, col) => {
+    g.strokeStyle = col;
+    g.lineWidth = R * 0.22;
+    g.beginPath();
+    g.arc(cx, cy, R * 0.78, a0, a1);
+    g.stroke();
+  };
+  const A = (f) => Math.PI * 0.75 + f * Math.PI * 1.5;
+  arc(A(0), A(0.55), '#1fb040');
+  arc(A(0.55), A(0.78), '#e8c818');
+  arc(A(0.78), A(1), '#d82018');
+  g.strokeStyle = WHITE;
+  g.lineWidth = 2;
+  for (let k = 0; k <= 10; k++) {
+    const a = A(k / 10);
+    g.beginPath();
+    g.moveTo(cx + Math.cos(a) * R * 0.62, cy + Math.sin(a) * R * 0.62);
+    g.lineTo(cx + Math.cos(a) * R * 0.5, cy + Math.sin(a) * R * 0.5);
+    g.stroke();
+  }
+  g.fillStyle = WHITE;
+  g.font = FONT(R * 0.22);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('AOA', cx, cy + R * 0.42);
+  const a = A(clamp(s.f, 0, 1));
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 4;
+  g.beginPath();
+  g.moveTo(cx, cy);
+  g.lineTo(cx + Math.cos(a) * R * 0.72, cy + Math.sin(a) * R * 0.72);
+  g.stroke();
+  g.fillStyle = '#333';
+  g.beginPath();
+  g.arc(cx, cy, R * 0.09, 0, Math.PI * 2);
+  g.fill();
+}
+
+// CDU del piedistallo (radio/navigazione): testo verde su fondo nero
+export function drawCdu(g, w, h, s) {
+  bg(g, w, h);
+  g.font = MONO(h * 0.085);
+  g.textBaseline = 'middle';
+  s.lines.forEach((l, i) => {
+    const y = h * (0.1 + i * 0.112);
+    g.textAlign = 'left';
+    g.fillStyle = i === 0 ? WHITE : l[2] || GREEN;
+    g.fillText(l[0], w * 0.04, y);
+    g.textAlign = 'right';
+    g.fillText(l[1] || '', w * 0.96, y);
+  });
+}
+
+// Display centrale dell'acqua (pannello principale): 4 serbatoi, totale, schiuma, portelli, preselezione
+export function drawWaterMfd(g, w, h, s) {
+  bg(g, w, h);
+  g.textBaseline = 'middle';
+  g.textAlign = 'center';
+  g.fillStyle = WHITE;
+  g.font = FONT(h * 0.065);
+  g.fillText('WATER / FOAM', w / 2, h * 0.06);
+  const bw = w * 0.11, bh = h * 0.52, y0 = h * 0.16;
+  for (let i = 0; i < 4; i++) {
+    const x = w * (0.06 + i * 0.135);
+    g.strokeStyle = '#8aa';
+    g.lineWidth = 2;
+    g.strokeRect(x, y0, bw, bh);
+    const f = clamp(s.tanks[i], 0, 1);
+    const col = s.doors[i] ? RED : f > 0.97 ? '#e8d020' : s.foam ? '#7fd8ff' : '#2fd04a';
+    g.fillStyle = col;
+    g.fillRect(x + 3, y0 + 3 + (bh - 6) * (1 - f), bw - 6, (bh - 6) * f);
+    // preselezione
+    g.fillStyle = CYAN;
+    g.fillRect(x - 3, y0 + bh * (1 - s.preset) - 1, bw + 6, 3);
+    g.fillStyle = WHITE;
+    g.font = FONT(h * 0.06);
+    g.fillText(String(i + 1), x + bw / 2, y0 + bh + h * 0.05);
+    g.fillStyle = s.doors[i] ? RED : '#333';
+    g.fillRect(x, y0 + bh + h * 0.085, bw, h * 0.035);
+  }
+  g.textAlign = 'right';
+  g.fillStyle = s.foam ? '#9df' : GREEN;
+  g.font = MONO(h * 0.13);
+  g.fillText(String(Math.round(s.total)), w * 0.97, h * 0.25);
+  g.font = FONT(h * 0.06);
+  g.fillStyle = WHITE;
+  g.fillText('LITRI', w * 0.97, h * 0.35);
+  g.font = MONO(h * 0.07);
+  g.fillStyle = s.foam ? CYAN : '#466';
+  g.fillText('FOAM ' + (s.foam ? s.foamPct + '%' : 'OFF'), w * 0.97, h * 0.48);
+  g.fillStyle = s.scoop ? AMBER : '#454';
+  g.fillText(s.scoop ? 'SCOOPING' : 'SCOOP', w * 0.97, h * 0.6);
+  g.fillStyle = s.probes ? AMBER : '#454';
+  g.fillText(s.probes ? 'PROBES DN' : 'PROBES UP', w * 0.97, h * 0.72);
+  g.fillStyle = GREEN;
+  g.fillText('PRESEL ' + Math.round(s.preset * 100) + '%', w * 0.97, h * 0.84);
+  g.fillStyle = s.doorsOpen ? RED : '#454';
+  g.textAlign = 'center';
+  g.fillText(s.doorsOpen ? 'DOORS OPEN' : 'DOORS CLOSED', w * 0.32, h * 0.94);
+}

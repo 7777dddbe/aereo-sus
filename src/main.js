@@ -445,6 +445,7 @@ function togglePanel(id) {
   el.style.display = el.style.display === 'flex' ? 'none' : 'flex';
 }
 function togglePause() {
+  if (!G) return;
   // in coppia la simulazione non si ferma: il menu è solo un velo
   if (mp && mp.active) {
     const el = $('pause');

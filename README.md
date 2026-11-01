@@ -84,7 +84,7 @@ Funziona dentro l'**Artifact condiviso**: tu e un amico aprite lo stesso link, s
 | **Acqua** | Scafo a V con redan: galleggiamento, planata, resistenza d'onda, galleggianti alari, sonde con portata e resistenza reali |
 | **Prestazioni** | Tarate sui dati del CL-415: pescaggio 12 s/410 m, max ~200 kt TAS, stallo ~68-72 kt flap 25 |
 | **Impianti** | Motori PW123AF con inerzia, 4 serbatoi e portelli (Torricelli), schiuma, carburante, avvisi |
-| **Cabina** | Strumenti funzionanti: orizzonte artificiale, HSI, altimetro, variometro, radioaltimetro, motori, quantità d'acqua, annunciatori; cloche, pedaliera e manette animate |
+| **Cabina** | Disposizione del vero CL-415: orologi LED e altoparlanti, anemometro/EADI/altimetro, EHSI/variometro, radar meteo che vede le montagne vere, display motori, GPS con i paesi vicini, idraulica/carburante/flap, display dell'acqua, carrello, glareshield con AOA, accelerometro e WATER DROP CONTROL, quadrante POWER/PROP con pomelli bianchi, maniglie rosse EMERG WATER DUMP, due CDU, trim, overhead completo, cloche ad anello col mozzo blu |
 | **Incendi** | Si propagano con vento e pendenza; l'acqua li spegne in base ai litri per m²; fumo, fiamme, colonne termiche (turbolenza!) |
 | **Grafica** | Rendering HDR con antialiasing, bloom sui riflessi e sulle fiamme, tonemapping cinematografico, correzione colore, vignettatura, grana di pellicola (qualità media e alta; la bassa è senza post-elaborazione per i telefoni) |
 | **Effetti** | Coda di gallo del pescaggio, spruzzi, scia di schiuma, getto che si frantuma in nebbia, gocce sul parabrezza, audio procedurale |
