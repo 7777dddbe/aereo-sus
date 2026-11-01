@@ -22,8 +22,18 @@ export const GARDA = {
 };
 
 // decodifica un PNG senza alcuna conversione di colore (i valori sono dati, non colori)
+// (niente fetch: negli Artifact la CSP blocca fetch anche sui data: URI)
+function dataUrlToBlob(url) {
+  const comma = url.indexOf(',');
+  const mime = url.slice(5, url.indexOf(';'));
+  const bin = atob(url.slice(comma + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
 async function pixels(url) {
-  const blob = await (await fetch(url)).blob();
+  const blob = dataUrlToBlob(url);
   let w, h, data;
   try {
     const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });

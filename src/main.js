@@ -183,8 +183,15 @@ $('startBtn').addEventListener('click', async () => {
   }
   audio.start();
   $('menu').style.display = 'none';
-  if (!G) await build();
-  else restart(settings.start);
+  if (!G) {
+    try {
+      await build();
+    } catch (e) {
+      // mai un caricamento infinito: si mostra l'errore
+      console.error(e);
+      $('loadStatus').textContent = 'Errore nel caricamento: ' + (e && e.message ? e.message : e) + ' — ricarica la pagina o scegli grafica Bassa.';
+    }
+  } else restart(settings.start);
   G.paused = false;
 });
 
