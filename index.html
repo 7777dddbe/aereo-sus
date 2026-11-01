@@ -47,6 +47,7 @@
   .fz.tot { color: var(--muted); }
   #camlabel { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 700; background: var(--panel); padding: 8px 18px; border-radius: 6px; transition: opacity 0.6s; }
   #camlabel.fade { opacity: 0; }
+  .credits { margin-top: 12px; font-size: 10.5px; line-height: 1.35; color: var(--muted); opacity: 0.8; }
   #mpBox { display: none; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
   #mpBox .mphead { font-weight: 700; margin-bottom: 8px; }
   #mpBox .mphead small { font-weight: 400; color: var(--muted); }
@@ -173,9 +174,9 @@
         <div>
           <label for="startSel">Partenza</label>
           <select id="startSel">
-            <option value="air">In volo sopra il lago</option>
-            <option value="water">In acqua (sul lago)</option>
-            <option value="runway">In pista (aeroporto)</option>
+            <option value="air">In volo sul lago (Malcesine)</option>
+            <option value="water">In acqua (tra Limone e Navene)</option>
+            <option value="runway">In pista (piana del Sarca)</option>
           </select>
         </div>
         <div>
@@ -215,11 +216,12 @@
         <div id="mpStatus">Tu e il tuo compagno scrivete lo <b>stesso codice</b> e premete il pulsante. Chi entra per primo crea la partita.</div>
       </div>
       <div class="tips">
-        <b>Missione:</b> spegni gli incendi sui versanti a sud del lago.<br>
+        <b>Missione:</b> Lago di Garda nord, dal vero. Spegni gli incendi sul Monte Brione (Riva/Torbole) e sopra Limone; altri possono partire sul Baldo e al Ponale.<br>
         <b>Pescaggio:</b> flap 15°, carrello SU, ammara a ~80 kt, tieni l'assetto, premi <b>P</b> (sonde) e dai potenza: 6137 L in circa 12 s.<br>
         <b>Sgancio:</b> 100-150 ft sopra gli alberi a ~110 kt, <b>SPAZIO</b>. Con <b>M</b> scegli salvo, 2+2, sequenza o 1 porta.<br>
         <button class="btn sec" data-help type="button">Elenco comandi</button>
       </div>
+      <div class="credits">Mappa reale: Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito di Copernicus da UE ed ESA · © ESA WorldCover 2021 (CC BY 4.0) · contiene dati Copernicus Sentinel modificati (2024).</div>
     </div>
   </div>
 

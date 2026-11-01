@@ -187,20 +187,38 @@ export class Vegetation {
       for (let gx = 0; gx < CHUNK; gx += step) {
         const x = x0 + gx + (r() - 0.5) * step * 0.9;
         const z = z0 + gz + (r() - 0.5) * step * 0.9;
-        const f = T.forestAt(x, z);
-        if (f <= 0.02) continue;
-        const dens = clamp(f * 1.25 + 0.25 * this.noise(x / 60, z / 60), 0, 1);
+        let f = T.forestAt(x, z);
+        let olive = false;
+        if (f <= 0.02) {
+          // uliveti e alberi sparsi in campagna e nei giardini, solo in basso (clima del Garda)
+          const lc = T.inAirfield(x, z) ? 0 : T.landClassAt(x, z);
+          if ((lc === 40 || lc === 30 || lc === 50) && r() < (lc === 50 ? 0.05 : 0.22)) {
+            const hh = T.heightAt(x, z);
+            if (hh > 1 && hh < 420) {
+              f = 0.4;
+              olive = true;
+            }
+          }
+          if (!olive) continue;
+        }
+        const dens = olive ? 1 : clamp(f * 1.25 + 0.25 * this.noise(x / 60, z / 60), 0, 1);
         if (r() > dens) continue;
         const h = T.heightAt(x, z);
-        if (h < 2.5) continue;
+        if (h < 0.8) continue;
+        if (T.upperLakeAt && T.upperLakeAt(x, z) !== null) continue;
+        // specie secondo la quota reale: lecci e pini vicino al lago, faggi e abeti più in alto
+        const alt = h + 64.5;
         const nz = this.noise(x / 700 + 5, z / 700);
-        let type = 0;
         const rr = r();
-        if (h > 350 || nz > 0.35) type = rr < 0.7 ? 1 : 2;
-        else if (nz < -0.25) type = rr < 0.75 ? 2 : 0;
-        else type = rr < 0.6 ? 0 : rr < 0.8 ? 2 : 1;
-        const s = 0.7 + r() * 0.65;
-        list.push({ x, y: h - 0.2, z, type, s, rot: r() * Math.PI * 2, tint: 0.8 + r() * 0.45, hue: r(), rank: r() });
+        let type;
+        if (olive) type = 2;
+        else if (alt < 450) type = rr < 0.62 + nz * 0.2 ? 2 : rr < 0.85 ? 0 : 1;
+        else if (alt < 1100) type = rr < 0.55 + nz * 0.25 ? 2 : 1;
+        else type = rr < 0.9 ? 1 : 2;
+        let s = 0.7 + r() * 0.65;
+        if (olive) s = 0.42 + r() * 0.2;
+        else if (alt > 1500) s *= 0.8;
+        list.push({ x, y: h - 0.2, z, type, s, rot: r() * Math.PI * 2, tint: olive ? 1.25 + r() * 0.2 : 0.8 + r() * 0.45, hue: r(), rank: r() });
       }
     }
     ch = { list };

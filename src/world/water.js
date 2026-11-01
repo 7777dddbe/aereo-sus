@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { waterNormalTexture, dataTextureFromChannels, tileableNoise } from '../core/textures.js';
 import { WORLD } from './terrain.js';
+import { landcover } from './garda.js';
 
 // Onde del lago (fisica + grafica). Ampiezza modesta (lago, vento 8-12 kt).
 export class Waves {
@@ -27,21 +28,22 @@ export class Waves {
 export class Water {
   constructor({ terrain, sunDir, quality = 'medium', renderer }) {
     this.waves = new Waves();
-    const L = WORLD.lake;
-    const size = 2 * (L.a + 900);
-    const geo = new THREE.PlaneGeometry(size, size, 1, 1);
+    const B = WORLD.lake.box;
+    const sizeX = B.x1 - B.x0, sizeZ = B.z1 - B.z0;
+    const cx = (B.x0 + B.x1) / 2, cz = (B.z0 + B.z1) / 2;
+    const geo = new THREE.PlaneGeometry(sizeX, sizeZ, 1, 1);
     const res = quality === 'low' ? 0.35 : quality === 'high' ? 0.75 : 0.5;
     const w = Math.round(window.innerWidth * res * Math.min(window.devicePixelRatio, 1.5));
     const h = Math.round(window.innerHeight * res * Math.min(window.devicePixelRatio, 1.5));
 
     // profondità del lago in una texture (per colore, trasparenza e schiuma della riva)
-    const dRes = 512;
+    const dRes = quality === 'low' ? 512 : 1024;
     const depth = new Float32Array(dRes * dRes);
-    const x0 = L.cx - size / 2, z0 = L.cz - size / 2;
+    const x0 = B.x0, z0 = B.z0;
     for (let j = 0; j < dRes; j++) {
       for (let i = 0; i < dRes; i++) {
-        const x = x0 + ((i + 0.5) / dRes) * size;
-        const z = z0 + ((j + 0.5) / dRes) * size;
+        const x = x0 + ((i + 0.5) / dRes) * sizeX;
+        const z = z0 + ((j + 0.5) / dRes) * sizeZ;
         const hh = terrain.heightAt(x, z);
         depth[j * dRes + i] = Math.max(0, Math.min(1, -hh / 25));
       }
@@ -62,7 +64,7 @@ export class Water {
         tNormal: { value: this.normalTex },
         tDepth: { value: depthTex },
         tFoam: { value: foamTex },
-        depthRect: { value: new THREE.Vector4(x0, z0, 1 / size, 1 / size) },
+        depthRect: { value: new THREE.Vector4(x0, z0, 1 / sizeX, 1 / sizeZ) },
         uTime: { value: 0 },
         sunDir: { value: sunDir.clone() },
         sunColor: { value: new THREE.Color(1.0, 0.93, 0.82).multiplyScalar(3.2) },
@@ -183,13 +185,52 @@ export class Water {
       multisample: quality === 'high' ? 4 : 0,
     });
     reflector.rotation.x = -Math.PI / 2;
-    reflector.position.set(L.cx, 0, L.cz);
+    reflector.position.set(cx, 0, cz);
     reflector.material.transparent = true;
     reflector.material.depthWrite = true;
     reflector.renderOrder = 1;
     reflector.name = 'water';
     this.mesh = reflector;
     this.uniforms = reflector.material.uniforms;
+  }
+
+  // Laghi in quota (Ledro, Tenno, ...): superfici d'acqua con riflesso del cielo, ritagliate
+  // sulla forma reale del lago (maschera dalla copertura del suolo)
+  buildUpperLakes() {
+    const group = new THREE.Group();
+    group.name = 'upperLakes';
+    this.upperMats = [];
+    for (const L of WORLD.upperLakes) {
+      const w = L.x1 - L.x0, d = L.z1 - L.z0;
+      const res = 256;
+      const mask = new Float32Array(res * res);
+      for (let j = 0; j < res; j++)
+        for (let i = 0; i < res; i++) {
+          // riga 0 dell'immagine = sud (uv di PlaneGeometry ruotata: v=0 a z massimo)
+          const x = L.x0 + ((i + 0.5) / res) * w, z = L.z1 - ((j + 0.5) / res) * d;
+          mask[j * res + i] = landcover(x, z, 2);
+        }
+      const tex = dataTextureFromChannels(res, [mask, mask, mask, 1], { repeat: false });
+      tex.flipY = false;
+      tex.needsUpdate = true;
+      const nt = this.normalTex.clone();
+      nt.wrapS = nt.wrapT = THREE.RepeatWrapping;
+      nt.repeat.set(w / 90, d / 90);
+      nt.needsUpdate = true;
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x123a44, roughness: 0.12, metalness: 0.0, envMapIntensity: 0.9,
+        normalMap: nt, normalScale: new THREE.Vector2(0.12, 0.12),
+        alphaMap: tex, alphaTest: 0.5, transparent: false,
+      });
+      const g = new THREE.PlaneGeometry(w, d);
+      g.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(g, mat);
+      m.position.set((L.x0 + L.x1) / 2, L.level + 0.05, (L.z0 + L.z1) / 2);
+      m.receiveShadow = true;
+      group.add(m);
+      this.upperMats.push(nt);
+    }
+    return group;
   }
 
   heightAt(x, z, t) {
@@ -199,6 +240,7 @@ export class Water {
   update(dt, time, env) {
     const u = this.uniforms;
     u.uTime.value = time;
+    if (this.upperMats) for (const nt of this.upperMats) nt.offset.set(time * 0.006, time * 0.004);
     if (env) {
       u.sunDir.value.copy(env.sunDir);
       u.fogColor.value.copy(env.fogColor);

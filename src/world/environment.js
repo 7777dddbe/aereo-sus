@@ -31,7 +31,7 @@ export class Environment {
     // colori di riferimento
     this.fogColor = new THREE.Color(0.62, 0.7, 0.78);
     this.skyColor = new THREE.Color(0.35, 0.5, 0.7);
-    this.fogDensity = 0.000046;
+    this.fogDensity = 0.000028; // aria alpina limpida: si vedono le montagne lontane
     scene.fog = new THREE.FogExp2(this.fogColor.clone(), this.fogDensity);
 
     // Sole
@@ -61,7 +61,8 @@ export class Environment {
     this._buildEnvMap();
 
     // Vento: direzione da cui soffia (gradi), intensità (m/s), raffiche
-    this.wind = { fromDeg: 250, speed: 4.6, gust: 2.2, turb: 1.0 };
+    // l'"Ora" del Garda: nel pomeriggio soffia da sud lungo il lago
+    this.wind = { fromDeg: 195, speed: 4.6, gust: 2.2, turb: 1.0 };
     this.noise = createNoise2D(4242);
     this.thermals = []; // { x, z, r, w } aggiornate dagli incendi
     this._windBase = new THREE.Vector3();

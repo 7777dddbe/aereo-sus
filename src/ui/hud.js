@@ -7,7 +7,8 @@ import { CAMS } from '../cameras.js';
 import { KT, FT, FPM } from '../core/constants.js';
 import { clamp, RAD, rng } from '../core/math.js';
 import { SPEC } from '../aircraft/specs.js';
-import { WORLD, toLake } from '../world/terrain.js';
+import { WORLD, DIR } from '../world/terrain.js';
+import { GARDA } from '../world/garda.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -171,40 +172,63 @@ export class HUD {
     }
   }
 
+  // carta del Garda dalla copertura del suolo reale (fatta una sola volta)
+  _baseMap() {
+    if (this._base) return this._base;
+    const N = GARDA.meta.NLC, L = GARDA.lc;
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const g = c.getContext('2d');
+    const img = g.createImageData(N, N);
+    const C = { 10: [34, 66, 34], 20: [70, 86, 44], 30: [96, 110, 60], 40: [118, 112, 66], 50: [150, 120, 104], 60: [130, 124, 116], 70: [235, 235, 240], 80: [42, 95, 134], 90: [50, 80, 70], 100: [110, 110, 90] };
+    for (let k = 0; k < N * N; k++) {
+      const col = L[k * 4 + 2] > 127 ? C[80] : C[L[k * 4]] || C[30];
+      img.data[k * 4] = col[0];
+      img.data[k * 4 + 1] = col[1];
+      img.data[k * 4 + 2] = col[2];
+      img.data[k * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    this._base = c;
+    return c;
+  }
+
   _drawMap(fm, fires) {
     const c = this.mapCanvas, g = this.mapCtx;
     const W = c.width, H = c.height;
-    const scale = W / 11000; // m -> px
-    const cx = W / 2, cy = H / 2;
-    const P = (x, z) => [cx + x * scale, cy + z * scale];
+    // finestra di 14 km attorno all'aereo (nord in alto)
+    const span = 14000;
+    const scale = W / span;
+    const half = WORLD.half;
+    const vx = Math.max(-half + span / 2, Math.min(half - span / 2, fm.pos.x));
+    const vz = Math.max(-half + span / 2, Math.min(half - span / 2, fm.pos.z));
+    const P = (x, z) => [W / 2 + (x - vx) * scale, H / 2 + (z - vz) * scale];
     g.clearRect(0, 0, W, H);
-    g.fillStyle = 'rgba(20,32,22,0.82)';
+    const base = this._baseMap();
+    const k = base.width / (2 * half);
+    g.globalAlpha = 0.92;
+    g.drawImage(base, (vx - span / 2 + half) * k, (vz - span / 2 + half) * k, span * k, span * k, 0, 0, W, H);
+    g.globalAlpha = 1;
+    g.fillStyle = 'rgba(10,16,12,0.25)';
     g.fillRect(0, 0, W, H);
-    // lago (sagoma approssimata)
-    if (!this._lakePath) {
-      const pts = [];
-      for (let a = 0; a < Math.PI * 2; a += 0.08) {
-        const u = Math.cos(a) * WORLD.lake.a, v = Math.sin(a) * WORLD.lake.b;
-        const x = WORLD.lake.cx + u * Math.cos(0.35) - v * Math.sin(0.35);
-        const z = WORLD.lake.cz + u * Math.sin(0.35) + v * Math.cos(0.35);
-        pts.push([x, z]);
-      }
-      this._lakePath = pts;
+    // nomi dei paesi
+    g.font = 'bold 11px Arial';
+    g.textAlign = 'center';
+    for (const [name, p] of Object.entries(WORLD.places)) {
+      const [px, py] = P(p.x, p.z);
+      if (px < 0 || py < 0 || px > W || py > H) continue;
+      g.fillStyle = 'rgba(0,0,0,0.55)';
+      g.fillText(name, px + 1, py + 1);
+      g.fillStyle = '#f2efe6';
+      g.fillText(name, px, py);
     }
-    g.fillStyle = '#2a5f86';
-    g.beginPath();
-    this._lakePath.forEach(([x, z], i) => {
-      const [px, py] = P(x, z);
-      i ? g.lineTo(px, py) : g.moveTo(px, py);
-    });
-    g.closePath();
-    g.fill();
+    g.textAlign = 'left';
     // pista
     const R = WORLD.runway;
-    g.strokeStyle = '#ddd';
+    g.strokeStyle = '#eee';
     g.lineWidth = 3;
     g.beginPath();
-    const dx = Math.cos(0.35) * R.len / 2, dz = Math.sin(0.35) * R.len / 2;
+    const dx = (DIR.x * R.len) / 2, dz = (DIR.z * R.len) / 2;
     g.moveTo(...P(R.cx - dx, R.cz - dz));
     g.lineTo(...P(R.cx + dx, R.cz + dz));
     g.stroke();

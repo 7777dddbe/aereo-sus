@@ -1,159 +1,45 @@
-// Terreno procedurale: lago lungo e stretto in una valle, colline boscose, montagne laterali,
-// aeroporto con pista, piazzale e rampa per idrovolanti che scende nel lago.
+// Terreno reale del Garda Nord (Riva, Torbole, Limone, Malcesine, Monte Baldo, Valle di Ledro):
+// altitudini Copernicus, immagine Sentinel-2 come colore di base con dettagli procedurali da vicino,
+// anello di montagne lontane (Alpi), pista nella piana del Sarca con piazzale e hangar.
 
 import * as THREE from 'three';
-import { createNoise2D, fbm, ridged, smoothstep, clamp, lerp, rng } from '../core/math.js';
+import { fbm, smoothstep, clamp, lerp, rng } from '../core/math.js';
 import { tileableNoise, tileableWorley, dataTextureFromChannels, normalMapFromHeight, makeCanvas, canvasTexture } from '../core/textures.js';
+import { GARDA, gardaHeight, farHeight, landcover, landClass } from './garda.js';
 
-const LAKE_ANGLE = 0.35;
-const cosA = Math.cos(LAKE_ANGLE), sinA = Math.sin(LAKE_ANGLE);
-export const DIR = { x: cosA, z: sinA }; // asse lungo del lago
-export const NRM = { x: -sinA, z: cosA }; // verso sud
+const M = GARDA.meta;
+const RH = M.runway.heading;
+export const DIR = { x: Math.sin(RH), z: -Math.cos(RH) }; // asse della pista
+export const NRM = { x: -DIR.z * M.runway.apronSide, z: DIR.x * M.runway.apronSide }; // verso il piazzale
 
 export const WORLD = {
-  half: 12000,
-  lake: { cx: 0, cz: 0, a: 3400, b: 900 },
-  runway: { len: 1800, wid: 30, elev: 9, cx: 0, cz: 0, angle: LAKE_ANGLE },
+  half: M.half,
+  farHalf: M.farHalf,
+  lake: { box: M.lakeBox, heading: M.lakeHeading },
+  upperLakes: M.upperLakes,
+  runway: { len: M.runway.len, wid: 30, elev: M.runway.elev, cx: M.runway.x, cz: M.runway.z, heading: RH },
   apron: { len: 260, wid: 110 },
-  ramp: { wid: 24 },
-  island: { u: 1500, v: 170, r: 160 },
-  fireZones: [],
+  fireZones: M.fireZones,
+  places: M.places,
 };
-// Pista 1.7 km a nord del centro del lago, parallela al suo asse
-WORLD.runway.cx = -NRM.x * 1750 + DIR.x * 250;
-WORLD.runway.cz = -NRM.z * 1750 + DIR.z * 250;
 WORLD.apron.cx = WORLD.runway.cx + NRM.x * 115;
 WORLD.apron.cz = WORLD.runway.cz + NRM.z * 115;
-WORLD.ramp.x0 = WORLD.apron.cx + NRM.x * 55;
-WORLD.ramp.z0 = WORLD.apron.cz + NRM.z * 55;
-// la rampa termina dentro il lago
-WORLD.ramp.x1 = WORLD.ramp.x0 + NRM.x * 900;
-WORLD.ramp.z1 = WORLD.ramp.z0 + NRM.z * 900;
 
-// Zone degli incendi (sui versanti)
-WORLD.fireZones = [
-  { x: NRM.x * 2350 - DIR.x * 900, z: NRM.z * 2350 - DIR.z * 900, size: 768, name: 'Versante Sud — Pineta' },
-  { x: NRM.x * 2700 + DIR.x * 1800, z: NRM.z * 2700 + DIR.z * 1800, size: 768, name: 'Collina di Monte Rosso' },
-  { x: -NRM.x * 2900 + DIR.x * 3300, z: -NRM.z * 2900 + DIR.z * 3300, size: 768, name: 'Bosco del Nord-Est' },
-  { x: NRM.x * 2200 - DIR.x * 4300, z: NRM.z * 2200 - DIR.z * 4300, size: 768, name: 'Valle Ovest' },
-];
-
-export function toLake(x, z) {
-  const dx = x - WORLD.lake.cx, dz = z - WORLD.lake.cz;
-  return { u: dx * cosA + dz * sinA, v: -dx * sinA + dz * cosA };
-}
-export function fromLake(u, v) {
-  return { x: WORLD.lake.cx + u * cosA - v * sinA, z: WORLD.lake.cz + u * sinA + v * cosA };
-}
-
-function segDist(px, pz, x0, z0, x1, z1) {
-  const vx = x1 - x0, vz = z1 - z0;
-  const t = clamp(((px - x0) * vx + (pz - z0) * vz) / (vx * vx + vz * vz), 0, 1);
-  const dx = px - (x0 + vx * t), dz = pz - (z0 + vz * t);
-  return { d: Math.hypot(dx, dz), t };
+// centro del Garda alla latitudine z (per le partenze): metà tra le due rive
+export function lakeCenterAt(z) {
+  const B = WORLD.lake.box;
+  let x0 = null, x1 = null;
+  for (let x = B.x0; x <= B.x1; x += 20) {
+    if (landcover(x, z, 2) > 0.6 && gardaHeight(x, z) < -2) {
+      if (x0 === null) x0 = x;
+      x1 = x;
+    }
+  }
+  return x0 === null ? 0 : (x0 + x1) / 2;
 }
 
 // ---------------------------------------------------------------------------
-export class HeightField {
-  constructor(seed = 1415) {
-    this.noise = createNoise2D(seed);
-    this.noise2 = createNoise2D(seed + 11);
-    this.noise3 = createNoise2D(seed + 23);
-  }
-
-  lakeE(x, z) {
-    const { u, v } = toLake(x, z);
-    const L = WORLD.lake;
-    let e = Math.sqrt((u / L.a) ** 2 + (v / L.b) ** 2);
-    e += 0.07 * this.noise(x / 800, z / 800) + 0.03 * this.noise2(x / 230, z / 230);
-    // baia laterale
-    const bay = Math.hypot((u + 1600) / 520, (v - 820) / 380);
-    e = Math.min(e, bay * 0.98 + 0.02);
-    return { e, u, v };
-  }
-
-  raw(x, z) {
-    const n = this.noise, n2 = this.noise2, n3 = this.noise3;
-    const { e, u, v } = this.lakeE(x, z);
-    const corridor = smoothstep(700, 2900, Math.abs(v) + 0.25 * Math.max(0, Math.abs(u) - 5500));
-    const far = smoothstep(1.05, 3.6, e);
-    const rid = ridged(n, x / 3800 + 10, z / 3800 - 7, 5);
-    const mountains = (0.18 + 0.82 * corridor) * Math.pow(far, 1.25) * (300 + 520 * rid);
-    const hills = 38 * fbm(n2, x / 950, z / 950, 4) + 14 * fbm(n3, x / 260, z / 260, 3) + 4 * n3(x / 60, z / 60);
-    const shoreRise = smoothstep(1.0, 1.7, e);
-    let land = 3.5 + 7 * shoreRise + (hills + 22) * shoreRise * 0.75 + mountains;
-    // lago
-    const depth = -1.5 - 26 * smoothstep(0.98, 0.45, e) + 2.5 * fbm(n3, x / 400, z / 400, 3);
-    let h;
-    if (e < 0.97) h = depth;
-    else if (e < 1.06) {
-      const t = smoothstep(0.97, 1.06, e);
-      h = lerp(depth, land, t);
-    } else h = land;
-    // isola
-    const I = WORLD.island;
-    const di = Math.hypot(u - I.u, v - I.v) / I.r;
-    if (di < 1.6) h = Math.max(h, lerp(14 + 6 * n(x / 80, z / 80), -3, smoothstep(0.2, 1.4, di)));
-    return h;
-  }
-
-  // altezza con aeroporto, rampa e piazzale spianati
-  height(x, z) {
-    let h = this.raw(x, z);
-    const R = WORLD.runway;
-    const dx = x - R.cx, dz = z - R.cz;
-    const along = dx * DIR.x + dz * DIR.z;
-    const across = dx * NRM.x + dz * NRM.z;
-    // pista + strisce laterali + piazzale
-    const mA = 1 - smoothstep(R.len / 2 + 120, R.len / 2 + 420, Math.abs(along));
-    const mC = 1 - smoothstep(R.wid / 2 + 70, R.wid / 2 + 260, Math.abs(across - (across > 0 ? Math.min(across, 180) : 0)));
-    const m = mA * mC;
-    if (m > 0) h = lerp(h, R.elev, m);
-    // rampa: dal piazzale scende nel lago
-    const Rp = WORLD.ramp;
-    const sd = segDist(x, z, Rp.x0, Rp.z0, Rp.x1, Rp.z1);
-    const mr = 1 - smoothstep(Rp.wid / 2 + 4, Rp.wid / 2 + 60, sd.d);
-    if (mr > 0) {
-      const len = Math.hypot(Rp.x1 - Rp.x0, Rp.z1 - Rp.z0);
-      const dist = sd.t * len;
-      const shoreDist = this._rampShore || (this._rampShore = this._findRampShore());
-      // pendenza costante ~7% negli ultimi 140 m fino a -3 m
-      const hr = dist < shoreDist - 110 ? R.elev : lerp(R.elev, -3.2, clamp((dist - (shoreDist - 110)) / 170, 0, 1));
-      h = lerp(h, hr, mr);
-    }
-    return h;
-  }
-
-  _findRampShore() {
-    const Rp = WORLD.ramp;
-    const len = Math.hypot(Rp.x1 - Rp.x0, Rp.z1 - Rp.z0);
-    for (let d = 0; d < len; d += 2) {
-      const x = Rp.x0 + ((Rp.x1 - Rp.x0) * d) / len;
-      const z = Rp.z0 + ((Rp.z1 - Rp.z0) * d) / len;
-      if (this.raw(x, z) < 0.5) return d;
-    }
-    return len * 0.7;
-  }
-
-  forest(x, z, h, slope) {
-    if (h < 2.5) return 0;
-    const R = WORLD.runway;
-    const dx = x - R.cx, dz = z - R.cz;
-    const along = dx * DIR.x + dz * DIR.z;
-    const across = dx * NRM.x + dz * NRM.z;
-    if (Math.abs(along) < R.len / 2 + 450 && across > -260 && across < 420) return 0;
-    const Rp = WORLD.ramp;
-    if (segDist(x, z, Rp.x0, Rp.z0, Rp.x1, Rp.z1).d < 70) return 0;
-    let f = 0.55 + 0.6 * fbm(this.noise2, x / 1400 + 3, z / 1400 - 5, 4) + 0.25 * this.noise3(x / 300, z / 300);
-    f *= smoothstep(2.5, 9, h);
-    f *= 1 - smoothstep(780, 1050, h);
-    f *= 1 - smoothstep(0.55, 0.8, slope);
-    return clamp(f, 0, 1);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Griglia non uniforme: fitta al centro, rada ai bordi.
+// Griglia non uniforme: un po' più fitta al centro, più rada ai bordi.
 function gridCoords(N, S, a) {
   const xs = new Float64Array(N);
   for (let i = 0; i < N; i++) {
@@ -176,23 +62,43 @@ function findCell(xs, x) {
   return lo;
 }
 
+// maschera della zona aeroportuale (0..1) e spianamento
+function runwayMask(x, z) {
+  const R = WORLD.runway;
+  const dx = x - R.cx, dz = z - R.cz;
+  const along = dx * DIR.x + dz * DIR.z;
+  const across = dx * NRM.x + dz * NRM.z;
+  const mA = 1 - smoothstep(R.len / 2 + 120, R.len / 2 + 380, Math.abs(along));
+  const mC = 1 - smoothstep(R.wid / 2 + 70, R.wid / 2 + 230, Math.abs(across - (across > 0 ? Math.min(across, 250) : 0)));
+  return mA * mC;
+}
+
 export class Terrain {
-  constructor({ quality = 'medium', seed = 1415 } = {}) {
-    this.hf = new HeightField(seed);
-    const N = quality === 'low' ? 360 : quality === 'high' ? 760 : 560;
+  constructor({ quality = 'medium' } = {}) {
+    const N = quality === 'low' ? 400 : quality === 'high' ? 900 : 640;
     this.N = N;
-    this.xs = gridCoords(N, WORLD.half, 0.3);
+    this.xs = gridCoords(N, WORLD.half, 0.55);
     this.zs = this.xs;
     this.heights = new Float32Array(N * N);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        this.heights[j * N + i] = this.hf.height(this.xs[i], this.zs[j]);
+        this.heights[j * N + i] = this.height(this.xs[i], this.zs[j]);
       }
     }
   }
 
-  // Altezza coerente con la mesh triangolata
+  // altitudine reale con la zona dell'aeroporto spianata
+  height(x, z) {
+    let h = gardaHeight(x, z);
+    const m = runwayMask(x, z);
+    if (m > 0) h = lerp(h, WORLD.runway.elev, m);
+    return h;
+  }
+
+  // Altezza coerente con la mesh triangolata (fuori dal mondo interno: anello lontano)
   heightAt(x, z) {
+    const S = WORLD.half;
+    if (x < -S || x > S || z < -S || z > S) return farHeight(x, z);
     const N = this.N, xs = this.xs, zs = this.zs, H = this.heights;
     const i = findCell(xs, x), j = findCell(zs, z);
     const fx = clamp((x - xs[i]) / (xs[i + 1] - xs[i]), 0, 1);
@@ -209,6 +115,34 @@ export class Terrain {
     return out.set(-hx, 2 * e, -hz).normalize();
   }
 
+  // copertura arborea reale (ESA WorldCover), niente alberi in aeroporto
+  forestAt(x, z) {
+    const S = WORLD.half - 20;
+    if (x < -S || x > S || z < -S || z > S) return 0;
+    if (runwayMask(x, z) > 0.05) return 0;
+    return landcover(x, z, 1);
+  }
+
+  // zona dell'aeroporto (niente alberi né case)
+  inAirfield(x, z) {
+    return runwayMask(x, z) > 0.02;
+  }
+
+  landClassAt(x, z) {
+    const S = WORLD.half - 20;
+    if (x < -S || x > S || z < -S || z > S) return 0;
+    return landClass(x, z);
+  }
+
+  // livello dei laghi in quota (Ledro, Tenno...) o null
+  upperLakeAt(x, z) {
+    for (const L of WORLD.upperLakes) {
+      if (x < L.x0 || x > L.x1 || z < L.z0 || z > L.z1) continue;
+      if (landcover(x, z, 2) > 0.5) return L.level;
+    }
+    return null;
+  }
+
   isRunway(x, z) {
     const R = WORLD.runway;
     const dx = x - R.cx, dz = z - R.cz;
@@ -218,8 +152,6 @@ export class Terrain {
     const A = WORLD.apron;
     const ax = x - A.cx, az = z - A.cz;
     if (Math.abs(ax * DIR.x + az * DIR.z) < A.len / 2 && Math.abs(ax * NRM.x + az * NRM.z) < A.wid / 2) return true;
-    const Rp = WORLD.ramp;
-    if (segDist(x, z, Rp.x0, Rp.z0, Rp.x1, Rp.z1).d < Rp.wid / 2) return true;
     // raccordo pista-piazzale
     if (Math.abs(along) < 15 && across > 0 && across < 70) return true;
     return false;
@@ -231,20 +163,46 @@ export class Terrain {
 
   // -------------------------------------------------------------------------
   buildMesh(fireAtlas) {
-    const N = this.N;
-    const pos = new Float32Array(N * N * 3);
-    const forest = new Float32Array(N * N);
+    const N = this.N, S = WORLD.half;
+    const nv = N * N + 4 * N; // griglia + bordo abbassato ("gonna" contro le fessure con l'anello lontano)
+    const pos = new Float32Array(nv * 3);
+    const uv = new Float32Array(nv * 2);
+    const forest = new Float32Array(nv);
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
         const k = j * N + i;
-        pos[k * 3] = this.xs[i];
+        const x = this.xs[i], z = this.zs[j];
+        pos[k * 3] = x;
         pos[k * 3 + 1] = this.heights[k];
-        pos[k * 3 + 2] = this.zs[j];
+        pos[k * 3 + 2] = z;
+        uv[k * 2] = (x + S) / (2 * S);
+        uv[k * 2 + 1] = (S - z) / (2 * S);
+        forest[k] = this.forestAt(x, z);
       }
+    }
+    // bordo: 4 lati, vertici duplicati 150 m più in basso
+    const border = [];
+    for (let i = 0; i < N; i++) border.push(i); // nord
+    for (let j = 0; j < N; j++) border.push(j * N + N - 1); // est
+    for (let i = N - 1; i >= 0; i--) border.push((N - 1) * N + i); // sud
+    for (let j = N - 1; j >= 0; j--) border.push(j * N); // ovest
+    let v = N * N;
+    const skirt = [];
+    for (const k of border) {
+      pos[v * 3] = pos[k * 3];
+      pos[v * 3 + 1] = pos[k * 3 + 1] - 150;
+      pos[v * 3 + 2] = pos[k * 3 + 2];
+      uv[v * 2] = uv[k * 2];
+      uv[v * 2 + 1] = uv[k * 2 + 1];
+      forest[v] = 0;
+      skirt.push([k, v]);
+      v++;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const idx = new Uint32Array((N - 1) * (N - 1) * 6);
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setAttribute('aForest', new THREE.BufferAttribute(forest, 1));
+    const idx = new Uint32Array((N - 1) * (N - 1) * 6 + skirt.length * 6);
     let p = 0;
     for (let j = 0; j < N - 1; j++) {
       for (let i = 0; i < N - 1; i++) {
@@ -253,14 +211,14 @@ export class Terrain {
         idx[p++] = b; idx[p++] = c; idx[p++] = d;
       }
     }
-    geo.setIndex(new THREE.BufferAttribute(idx, 1));
-    geo.computeVertexNormals();
-    const nrm = geo.attributes.normal.array;
-    for (let k = 0; k < N * N; k++) {
-      forest[k] = this.hf.forest(pos[k * 3], pos[k * 3 + 2], pos[k * 3 + 1], 1 - nrm[k * 3 + 1]);
+    for (let s = 0; s < skirt.length - 1; s++) {
+      const [a, a2] = skirt[s], [b, b2] = skirt[s + 1];
+      idx[p++] = a; idx[p++] = b; idx[p++] = a2;
+      idx[p++] = b; idx[p++] = b2; idx[p++] = a2;
     }
+    geo.setIndex(new THREE.BufferAttribute(idx.subarray(0, p), 1));
+    geo.computeVertexNormals();
     this.forestGrid = forest;
-    geo.setAttribute('aForest', new THREE.BufferAttribute(forest, 1));
     geo.computeBoundingSphere();
 
     const mat = createTerrainMaterial(fireAtlas);
@@ -272,10 +230,72 @@ export class Terrain {
     return mesh;
   }
 
-  forestAt(x, z) {
-    const N = this.N;
-    const i = findCell(this.xs, x), j = findCell(this.zs, z);
-    return this.forestGrid ? this.forestGrid[j * N + i] : 0;
+  // Anello lontano (80 x 80 km): le Alpi all'orizzonte, il Garda a sud, il Monte Baldo intero
+  buildFarMesh() {
+    const N = M.NFAR, S = M.farHalf, step = (2 * S) / (N - 1), H = WORLD.half;
+    const pos = new Float32Array(N * N * 3), col = new Float32Array(N * N * 3);
+    const C = {
+      10: [0.03, 0.055, 0.022], 20: [0.07, 0.08, 0.04], 30: [0.1, 0.115, 0.05], 40: [0.13, 0.125, 0.065], 50: [0.2, 0.18, 0.16],
+      60: [0.2, 0.19, 0.17], 70: [0.85, 0.87, 0.9], 80: [0.012, 0.03, 0.04], 90: [0.05, 0.07, 0.04], 95: [0.04, 0.06, 0.03], 100: [0.14, 0.14, 0.11],
+    };
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const k = j * N + i;
+        const x = -S + i * step, z = -S + j * step;
+        let h = GARDA.far[k];
+        // dentro il mondo interno resta sempre sotto il terreno dettagliato: minimo del terreno
+        // vero nel raggio di una cella e mezza (così nessun triangolo lontano spunta nelle valli)
+        if (Math.abs(x) < H + step && Math.abs(z) < H + step) {
+          let mn = h;
+          for (let dz = -450; dz <= 450; dz += 75)
+            for (let dx = -450; dx <= 450; dx += 75) {
+              const xx = x + dx, zz = z + dz;
+              if (Math.abs(xx) < H && Math.abs(zz) < H) mn = Math.min(mn, gardaHeight(xx, zz));
+            }
+          h = Math.abs(x) < H && Math.abs(z) < H ? mn - 8 : Math.min(h, mn - 2);
+        }
+        pos[k * 3] = x;
+        pos[k * 3 + 1] = h;
+        pos[k * 3 + 2] = z;
+        let c = C[GARDA.farClass[k]] || C[30];
+        const alt = GARDA.far[k] + M.lakeMSL;
+        if (alt > 2900 && GARDA.farClass[k] !== 80) c = C[70];
+        else if (alt > 2200 && GARDA.farClass[k] !== 70) c = [0.16, 0.155, 0.14];
+        col[k * 3] = c[0];
+        col[k * 3 + 1] = c[1];
+        col[k * 3 + 2] = c[2];
+      }
+    }
+    const idx = new Uint32Array((N - 1) * (N - 1) * 6);
+    let p = 0;
+    for (let j = 0; j < N - 1; j++)
+      for (let i = 0; i < N - 1; i++) {
+        const a = j * N + i, b = (j + 1) * N + i, c = (j + 1) * N + i + 1, d = j * N + i + 1;
+        idx[p++] = a; idx[p++] = b; idx[p++] = d;
+        idx[p++] = b; idx[p++] = c; idx[p++] = d;
+      }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0 }));
+    mesh.name = 'farTerrain';
+    mesh.receiveShadow = false;
+    const group = new THREE.Group();
+    group.add(mesh);
+    // il Garda a sud del mondo interno: piano d'acqua attorno (con un buco al centro)
+    const wm = new THREE.MeshStandardMaterial({ color: 0x0c2a33, roughness: 0.1, metalness: 0, envMapIntensity: 1.0 });
+    for (const [cx, cz, w, d] of [
+      [0, (H + S) / 2, 2 * S, S - H], [0, -(H + S) / 2, 2 * S, S - H], [(H + S) / 2, 0, S - H, 2 * H], [-(H + S) / 2, 0, S - H, 2 * H],
+    ]) {
+      const g = new THREE.PlaneGeometry(w, d);
+      g.rotateX(-Math.PI / 2);
+      const m = new THREE.Mesh(g, wm);
+      m.position.set(cx, 0.05, cz);
+      group.add(m);
+    }
+    return group;
   }
 }
 
@@ -297,7 +317,15 @@ function terrainTextures() {
 
 function createTerrainMaterial(fireAtlas) {
   const { noiseTex, crownNormal } = terrainTextures();
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 });
+  // immagine Sentinel-2 come colore di base (sRGB)
+  const sat = new THREE.Texture(GARDA.satellite);
+  sat.colorSpace = THREE.SRGBColorSpace;
+  sat.anisotropy = 8;
+  sat.wrapS = sat.wrapT = THREE.ClampToEdgeWrapping;
+  sat.generateMipmaps = true;
+  sat.minFilter = THREE.LinearMipmapLinearFilter;
+  sat.needsUpdate = true;
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: sat, roughness: 0.95, metalness: 0 });
   const uniforms = {
     tNoise: { value: noiseTex },
     tCrown: { value: crownNormal },
@@ -362,31 +390,39 @@ function createTerrainMaterial(fireAtlas) {
           float slope = 1.0 - N.y;
           vec4 nA = texture2D(tNoise, p / 61.0);
           vec4 nB = texture2D(tNoise, p / 437.0 + 0.31);
-          vec4 nC = texture2D(tNoise, p / 2900.0 + 0.77);
-          float macro = nC.r;
-          vec3 dryGrass = mix(vec3(0.19, 0.155, 0.06), vec3(0.15, 0.135, 0.05), nB.r);
-          vec3 greenGrass = mix(vec3(0.085, 0.13, 0.035), vec3(0.14, 0.16, 0.05), nA.r);
-          vec3 grass = mix(greenGrass, dryGrass, smoothstep(0.35, 0.75, macro + nB.g * 0.3));
-          grass *= 0.8 + 0.4 * nA.g;
-          vec3 rock = mix(vec3(0.17, 0.15, 0.13), vec3(0.28, 0.26, 0.23), nA.r) * (0.75 + 0.5 * nB.g);
-          vec3 sand = mix(vec3(0.42, 0.36, 0.22), vec3(0.52, 0.45, 0.28), nA.g);
-          vec3 wetSand = vec3(0.16, 0.13, 0.08);
-          vec3 lakebed = mix(vec3(0.09, 0.085, 0.05), vec3(0.15, 0.13, 0.08), nA.r);
-          // chiome del bosco
+          float camD = length(vWPos - cameraPosition);
+          float nearF = 1.0 - smoothstep(700.0, 3500.0, camD);
+          // colore reale dal satellite (già lineare), leggermente meno saturo e più chiaro
+          vec3 col = diffuseColor.rgb;
+          float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          col = mix(vec3(lum), col, 0.85) * 1.02;
+          // dettagli da vicino: variazioni del suolo e chiome degli alberi
+          col *= mix(1.0, 0.84 + 0.32 * nA.r, nearF);
           float crown = texture2D(tNoise, p / 23.0).b;
           float crown2 = texture2D(tNoise, p / 9.0 + 0.5).b;
-          vec3 canopyDark = vec3(0.016, 0.034, 0.011);
-          vec3 canopyLight = mix(vec3(0.05, 0.085, 0.022), vec3(0.075, 0.09, 0.03), nB.r);
-          vec3 canopy = mix(canopyDark, canopyLight, crown * 0.75 + crown2 * 0.35);
-          canopy *= 0.75 + 0.5 * macro;
-          tFor = smoothstep(0.25, 0.55, vForest + (nB.g - 0.5) * 0.35);
-          vec3 col = mix(grass, canopy, tFor);
-          col = mix(col, rock, smoothstep(0.42, 0.62, slope + (nA.r - 0.5) * 0.25) * (1.0 - tFor * 0.6));
-          // spiagge e fondale
-          float beach = 1.0 - smoothstep(1.8, 4.5 + nA.r * 2.0, h);
-          col = mix(col, sand, beach * (1.0 - smoothstep(0.35, 0.6, slope)));
-          col = mix(col, wetSand, 1.0 - smoothstep(-0.2, 0.8, h));
-          col = mix(col, lakebed, 1.0 - smoothstep(-2.5, -0.3, h));
+          tFor = smoothstep(0.3, 0.75, vForest + (nB.g - 0.5) * 0.2);
+          col *= mix(1.0, 0.62 + 0.55 * (crown * 0.7 + crown2 * 0.4), tFor * nearF);
+          // pareti ripide: la foto dall'alto lì è "stirata"; si usa il colore medio della zona
+          // con una roccia proiettata sui tre assi (strati e venature del calcare)
+          float steep = smoothstep(0.32, 0.62, slope);
+          if (steep > 0.0) {
+            vec3 avg = texture2D(map, vMapUv, 3.5).rgb;
+            float lavg = dot(avg, vec3(0.2126, 0.7152, 0.0722));
+            avg = mix(vec3(lavg), avg, 0.6) * 0.92;
+            vec3 an = abs(N);
+            an /= (an.x + an.y + an.z);
+            float tx = texture2D(tNoise, vWPos.zy / vec2(37.0, 9.0)).r;
+            float ty = texture2D(tNoise, vWPos.xz / 41.0).r;
+            float tz = texture2D(tNoise, vWPos.xy / vec2(37.0, 9.0)).r;
+            float tri = tx * an.x + ty * an.y + tz * an.z;
+            float tx2 = texture2D(tNoise, vWPos.zy / 7.0).g;
+            float tz2 = texture2D(tNoise, vWPos.xy / 7.0).g;
+            float tri2 = tx2 * an.x + tz2 * an.z + 0.5 * an.y;
+            vec3 rockC = avg * (0.55 + 0.7 * tri) * (0.85 + 0.3 * tri2);
+            col = mix(col, rockC, steep * (1.0 - tFor * 0.5));
+          }
+          // fondale del lago
+          col = mix(col, col * 0.45 + vec3(0.012, 0.02, 0.016), 1.0 - smoothstep(-2.5, -0.2, h));
           // bruciato / bagnato
           tBurnV = burnSample(p);
           vec3 ash = mix(vec3(0.018, 0.016, 0.014), vec3(0.05, 0.047, 0.043), nA.g);
@@ -549,31 +585,6 @@ export function buildAirfield(terrain) {
   tw.rotation.y = rw.rotation.y + Math.PI / 2;
   tw.receiveShadow = true;
   group.add(tw);
-
-  // rampa per idrovolanti: segue il terreno
-  const Rp = WORLD.ramp;
-  const rlen = Math.hypot(Rp.x1 - Rp.x0, Rp.z1 - Rp.z0);
-  const segs = 90;
-  const rGeo = new THREE.PlaneGeometry(Rp.wid, rlen, 1, segs);
-  rGeo.rotateX(-Math.PI / 2);
-  const rp = rGeo.attributes.position;
-  const ang = Math.atan2(NRM.x, NRM.z);
-  const ca = Math.cos(ang), sa = Math.sin(ang);
-  for (let i = 0; i < rp.count; i++) {
-    const lx = rp.getX(i), lz = rp.getZ(i);
-    // asse locale z lungo la rampa (da x0 a x1)
-    const t = 0.5 - lz / rlen;
-    const wx = Rp.x0 + (Rp.x1 - Rp.x0) * t + lx * NRM.z;
-    const wz = Rp.z0 + (Rp.z1 - Rp.z0) * t - lx * NRM.x;
-    rp.setXYZ(i, wx, terrain.heightAt(wx, wz) + 0.08, wz);
-  }
-  rGeo.computeVertexNormals();
-  const rampMat = cMat.clone();
-  rampMat.map = ctex.clone();
-  rampMat.map.repeat.set(1, rlen / 30);
-  const ramp = new THREE.Mesh(rGeo, rampMat);
-  ramp.receiveShadow = true;
-  group.add(ramp);
 
   buildBuildings(group, terrain, rw.rotation.y);
   return group;

@@ -2,7 +2,9 @@
 
 import * as THREE from 'three';
 import { Environment } from './world/environment.js';
-import { Terrain, buildAirfield, WORLD, DIR, NRM, fromLake } from './world/terrain.js';
+import { Terrain, buildAirfield, WORLD, DIR, NRM, lakeCenterAt } from './world/terrain.js';
+import { loadGarda } from './world/garda.js';
+import { Towns } from './world/towns.js';
 import { Vegetation } from './world/vegetation.js';
 import { Water } from './world/water.js';
 import { FireSystem } from './world/fires.js';
@@ -233,12 +235,15 @@ async function build() {
   env.wind.turb = settings.wind === 'calm' ? 0.3 : settings.wind === 'strong' ? 2.2 : 1.0;
   env.updateWindBase();
 
-  await step('Generazione del terreno (valle, lago, montagne)…');
+  await step('Dati reali del Garda (altitudini, boschi, satellite)…');
+  await loadGarda();
+  await step('Terreno: Riva, Torbole, Monte Baldo, Valle di Ledro…');
   const terrain = new Terrain({ quality: q });
   await step('Incendi boschivi…');
   const fires = new FireSystem(scene, terrain, env, { quality: q });
   await step('Superficie del terreno…');
   scene.add(terrain.buildMesh(fires.fireAtlas));
+  scene.add(terrain.buildFarMesh());
   await step('Aeroporto e rampa idrovolanti…');
   const airfield = buildAirfield(terrain);
   scene.add(airfield);
@@ -249,6 +254,9 @@ async function build() {
   await step('Lago con riflessi…');
   const water = new Water({ terrain, sunDir: env.sunDir, quality: q, renderer });
   scene.add(water.mesh);
+  scene.add(water.buildUpperLakes());
+  await step('Paesi: Riva, Arco, Limone, Malcesine…');
+  const towns = new Towns(scene, terrain, { quality: q });
   await step('Canadair CL-415: fusoliera, ali, livrea…');
   const model = new AircraftModel({ quality: q });
   scene.add(model.group);
@@ -258,8 +266,9 @@ async function build() {
 
   // interfaccia del mondo per la fisica
   const world = {
-    groundHeight: (x, z) => (Math.abs(x) > WORLD.half - 50 || Math.abs(z) > WORLD.half - 50 ? 2000 : terrain.heightAt(x, z)),
-    waterHeight: (x, z, t) => water.heightAt(x, z, t),
+    groundHeight: (x, z) => (Math.abs(x) > WORLD.farHalf - 500 || Math.abs(z) > WORLD.farHalf - 500 ? 3000 : terrain.heightAt(x, z)),
+    // Garda a 0 m (64,5 m s.l.m.); Ledro e Tenno alla loro quota
+    waterHeight: (x, z, t) => (terrain.upperLakeAt(x, z) ?? 0) + water.heightAt(x, z, t),
     windAt: (x, y, z, t, out) => env.windAt(x, y, z, t, out, Math.max(terrain.heightAt(x, z), 0)),
     surfaceFriction: (x, z) => terrain.surfaceFriction(x, z),
   };
@@ -290,7 +299,7 @@ async function build() {
   $('hud').style.display = 'block';
   hud.message('Benvenuto a bordo del CL-415. Premi H per i comandi.', 'info', 8);
   if (input.mouseYoke) hud.message('🖱️ Porta il mouse nel cerchio al centro per prendere la cloche · rotella = manette · tasto destro = guardati intorno', 'info', 8);
-  hud.message('Incendi attivi sui versanti a sud del lago: guarda la mappa in alto a destra.', 'warn', 10);
+  hud.message('Lago di Garda nord: incendi sul Monte Brione e sopra Limone. Guarda la mappa in alto a destra.', 'warn', 10);
   hud.setCamera(rig.mode);
   if (mp) onRole(mp.role, 'solo');
   window.addEventListener('resize', onResize);
@@ -330,10 +339,11 @@ function restart(mode) {
   input.yokeEngaged = false;
   input.stick.x = input.stick.y = 0;
   input.rudder = 0;
-  const L = WORLD.lake;
-  const hdg = Math.atan2(DIR.x, -DIR.z); // prua lungo l'asse del lago
+  const hdg = WORLD.lake.heading; // prua lungo il lago, verso Riva (nord)
+  const rwHdg = Math.atan2(DIR.x, -DIR.z);
   if (mode === 'water') {
-    const p = fromLake(-2600, -280);
+    // in mezzo al lago tra Limone e Navene, prua verso Riva: 6 km d'acqua davanti
+    const p = { x: lakeCenterAt(1800), z: 1800 };
     sys.gearDown = false;
     sys.gearPos = 0;
     sys.flapIndex = 2;
@@ -348,9 +358,10 @@ function restart(mode) {
     sys.flapIndex = 1;
     sys.flapPos = 10;
     sys.parkingBrake = false;
-    fm.reset(new THREE.Vector3(x, 0, z), -hdg, 0, 'runway');
+    fm.reset(new THREE.Vector3(x, 0, z), -rwHdg, 0, 'runway');
   } else {
-    const p = fromLake(-5200, 0);
+    // sopra il lago all'altezza di Malcesine, verso nord
+    const p = { x: lakeCenterAt(9000), z: 9000 };
     sys.gearDown = false;
     sys.gearPos = 0;
     sys.flapIndex = 0;

@@ -1,0 +1,131 @@
+{
+ "source": "Copernicus DEM GLO-30, ESA WorldCover 2021 v200, Sentinel-2 L2A S2B_32TPR_20240731_0_L2A",
+ "utm": {
+  "zone": 32,
+  "E0": 642750,
+  "N0": 5077020
+ },
+ "half": 12000,
+ "farHalf": 40000,
+ "heightScale": 4,
+ "heightOffset": 300,
+ "NH": 1025,
+ "NLC": 1200,
+ "NFAR": 257,
+ "lakeMSL": 64.5,
+ "lakeBox": {
+  "x0": -9505,
+  "z0": -6045,
+  "x1": 3135,
+  "z1": 12195
+ },
+ "lakeHeading": 0.16480757175819288,
+ "upperLakes": [
+  {
+   "level": 587.5,
+   "x0": -8335,
+   "z0": -5865,
+   "x1": -5555,
+   "z1": -3965
+  },
+  {
+   "level": 152.79,
+   "x0": 5995,
+   "z0": -4095,
+   "x1": 6555,
+   "z1": -3075
+  },
+  {
+   "level": 504.5,
+   "x0": -2235,
+   "z0": -12025,
+   "x1": -1645,
+   "z1": -11445
+  }
+ ],
+ "runway": {
+  "x": 3425,
+  "z": -7781,
+  "heading": 0,
+  "len": 1600,
+  "elev": 14.4,
+  "apronSide": 1
+ },
+ "fireZones": [
+  {
+   "x": 2515,
+   "z": -6253,
+   "size": 768,
+   "name": "Monte Brione"
+  },
+  {
+   "x": -4715,
+   "z": 1431,
+   "size": 768,
+   "name": "Sopra Limone"
+  },
+  {
+   "x": 47,
+   "z": 4514,
+   "size": 768,
+   "name": "Monte Baldo — Navene"
+  },
+  {
+   "x": -2172,
+   "z": -3112,
+   "size": 768,
+   "name": "Ponale — Pregasina"
+  }
+ ],
+ "places": {
+  "Riva del Garda": {
+   "x": 150,
+   "z": -5966
+  },
+  "Torbole": {
+   "x": 2733,
+   "z": -4403
+  },
+  "Nago": {
+   "x": 4013,
+   "z": -5101
+  },
+  "Arco": {
+   "x": 3500,
+   "z": -9724
+  },
+  "Limone": {
+   "x": -3525,
+   "z": 2188
+  },
+  "Malcesine": {
+   "x": -2079,
+   "z": 7713
+  },
+  "Navene": {
+   "x": -1525,
+   "z": 4699
+  },
+  "Pregasina": {
+   "x": -1679,
+   "z": -2078
+  },
+  "Monte Brione": {
+   "x": 2572,
+   "z": -6289
+  },
+  "Monte Altissimo": {
+   "x": 3858,
+   "z": 2785
+  },
+  "Lago di Ledro": {
+   "x": -6166,
+   "z": -4756
+  },
+  "Campione": {
+   "x": -6496,
+   "z": 8478
+  }
+ },
+ "buildings": 15632
+}

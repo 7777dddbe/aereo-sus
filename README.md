@@ -1,7 +1,7 @@
 # 🛩️ Canadair CL-415 — Simulatore antincendio 3D
 
 Simulatore realistico (non arcade) del **Canadair CL-415 "Superscooper"** che gira nel browser.
-Pesca l'acqua dal lago, vola sugli incendi e sgancia. Tutto è generato dal codice: nessun modello o texture esterna.
+Pesca l'acqua dal **Lago di Garda nord** (ricostruito dal vero: Riva, Torbole, Limone, Malcesine, Monte Baldo, Valle di Ledro), vola sugli incendi e sgancia. L'aereo e la cabina sono generati dal codice; il mondo viene da dati satellitari aperti.
 
 ## ▶️ Come si avvia
 
@@ -11,6 +11,24 @@ Pesca l'acqua dal lago, vola sugli incendi e sgancia. Tutto è generato dal codi
 | **Da sorgente** | `npm install` → `npm run build` → apri `index.html` |
 | **Sviluppo** | `npm run dev` (ricompila a ogni modifica) + `npm run serve` |
 | **Test fisica** | `npm run test:physics` (banco prova del modello di volo) |
+
+## 🗺️ Il mondo: Garda nord dal vero
+
+| Cosa | Fonte |
+|---|---|
+| ⛰️ Altitudini (Monte Baldo, Altissimo, Brione, valle del Sarca, Ledro) | Copernicus DEM GLO-30 (30 m) |
+| 🌲 Boschi, paesi, prati, roccia, laghi (Garda, Ledro, Tenno) | ESA WorldCover 2021 (10 m) |
+| 🛰️ Colore del terreno | Sentinel-2 L2A del 31/07/2024 (10 m), ombre del satellite attenuate |
+| 🏔️ Orizzonte: Alpi, Brenta, Adamello, Garda sud | anello lontano 80 × 80 km dagli stessi dati |
+
+- 🏘️ ~15.000 case nei punti in cui il satellite vede costruito, con colori e tetti tipici del lago.
+- 🌳 Alberi dove ci sono boschi veri: lecci e pini vicino al lago, faggi e abeti più in alto, ulivi in campagna.
+- 🛬 La pista è **fittizia**: nella realtà non c'è un aeroporto qui, quindi è nel punto più piano della piana del Sarca, tra Riva e Arco.
+- 🔥 Incendi su Monte Brione, sopra Limone, sul Monte Baldo (Navene) e al Ponale.
+- 💨 Vento: l'"Ora" da sud, tipica dei pomeriggi del Garda.
+- 🔁 Per rigenerare i dati: `npm run garda` (scarica le finestre necessarie da AWS Open Data).
+
+**Crediti dei dati**: Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito del programma Copernicus dall'Unione Europea e dall'ESA · © ESA WorldCover project 2021, contiene dati Copernicus Sentinel modificati (2021) elaborati dal consorzio ESA WorldCover (CC BY 4.0) · contiene dati Copernicus Sentinel modificati (2024).
 
 ## 🎮 Comandi principali
 
@@ -75,7 +93,9 @@ Funziona dentro l'**Artifact condiviso**: tu e un amico aprite lo stesso link, s
 
 ```
 src/aircraft/  modello di volo, impianti, modello 3D, livrea, cabina, strumenti
-src/world/     terreno, lago, vegetazione, cielo, incendi
+src/world/     terreno reale del Garda, lago, laghi in quota, paesi, vegetazione, cielo, incendi
+src/world/garda/  dati cotti (altitudini, copertura del suolo, satellite, edifici)
+tools/garda/   script che scarica e prepara i dati reali
 src/fx/        particelle ed effetti d'acqua
 src/net/       multiplayer (pilota + copilota)
 src/audio/     suoni procedurali
