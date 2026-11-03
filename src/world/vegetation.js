@@ -180,15 +180,23 @@ export class Vegetation {
     if (ch) return ch;
     const r = rng((cx * 73856093) ^ (cz * 19349663));
     const list = [];
-    const step = 9.5;
-    const x0 = cx * CHUNK, z0 = cz * CHUNK;
     const T = this.terrain;
+    const ov0 = T.overlay;
+    // dove c'è la chioma reale (1 m) si piantano più alberi, ognuno con la sua altezza
+    const inChm = ov0 && ov0.chm && cx * CHUNK + CHUNK > ov0.chm.x0 && cx * CHUNK < ov0.chm.x0 + ov0.chm.size && cz * CHUNK + CHUNK > ov0.chm.z0 && cz * CHUNK < ov0.chm.z0 + ov0.chm.size;
+    const step = inChm ? 6.2 : 9.5;
+    const x0 = cx * CHUNK, z0 = cz * CHUNK;
     for (let gz = 0; gz < CHUNK; gz += step) {
       for (let gx = 0; gx < CHUNK; gx += step) {
         const x = x0 + gx + (r() - 0.5) * step * 0.9;
         const z = z0 + gz + (r() - 0.5) * step * 0.9;
         let f = T.forestAt(x, z);
         let olive = false;
+        let ch = null;
+        if (inChm) {
+          ch = ov0.chmAt(x, z);
+          if (ch) f = ch.cov >= 0.3 && ch.h >= 2.5 ? 1 : 0;
+        }
         // dati OSM: niente alberi su strade, case, acqua e spiagge; niente nei vigneti; ulivi negli uliveti
         const ov = T.overlay;
         if (ov) {
@@ -213,7 +221,7 @@ export class Vegetation {
           }
           if (!olive) continue;
         }
-        const dens = olive ? 1 : clamp(f * 1.25 + 0.25 * this.noise(x / 60, z / 60), 0, 1);
+        const dens = olive ? 1 : ch ? (f ? clamp(ch.cov * 1.15, 0, 1) : 0) : clamp(f * 1.25 + 0.25 * this.noise(x / 60, z / 60), 0, 1);
         if (r() > dens) continue;
         const h = T.heightAt(x, z);
         if (h < 0.8) continue;
@@ -228,9 +236,15 @@ export class Vegetation {
         else if (alt < 1100) type = rr < 0.55 + nz * 0.25 ? 2 : 1;
         else type = rr < 0.9 ? 1 : 2;
         let s = 0.7 + r() * 0.65;
+        let sy = 0;
+        if (ch && !olive) {
+          // altezza vera dalla chioma a 1 m; la larghezza cresce meno dell'altezza (chiome strette e fitte)
+          sy = clamp((ch.h / [9.6, 11.5, 8.4][type]) * (0.9 + r() * 0.2), 0.3, 2.4);
+          s = 0.6 * Math.pow(sy, 0.62) * (0.9 + r() * 0.22);
+        }
         if (olive) s = 0.42 + r() * 0.2;
-        else if (alt > 1500) s *= 0.8;
-        list.push({ x, y: h - 0.2, z, type, s, rot: r() * Math.PI * 2, tint: olive ? 1.25 + r() * 0.2 : 0.8 + r() * 0.45, hue: r(), rank: r() });
+        else if (alt > 1500 && !ch) s *= 0.8;
+        list.push({ x, y: h - 0.2, z, type, s, sy, rot: r() * Math.PI * 2, tint: olive ? 1.25 + r() * 0.2 : 0.8 + r() * 0.45, hue: r(), rank: r() });
       }
     }
     ch = { list };
@@ -279,7 +293,7 @@ export class Vegetation {
       for (let i = 0; i < arr.length; i++) {
         const t = arr[i];
         this._q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, t.rot);
-        this._s.set(t.s, t.s * (0.9 + t.hue * 0.25), t.s);
+        this._s.set(t.s, (t.sy || t.s) * (0.9 + t.hue * 0.25), t.s);
         this._p.set(t.x, t.y, t.z);
         this._m.compose(this._p, this._q, this._s);
         im.setMatrixAt(i, this._m);

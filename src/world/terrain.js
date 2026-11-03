@@ -3,9 +3,10 @@
 // anello di montagne lontane (Alpi), pista nella piana del Sarca con piazzale e hangar.
 
 import * as THREE from 'three';
-import { fbm, smoothstep, clamp, lerp, rng } from '../core/math.js';
+import { fbm, smoothstep, clamp, lerp, rng, createNoise2D } from '../core/math.js';
 import { tileableNoise, tileableWorley, dataTextureFromChannels, normalMapFromHeight, makeCanvas, canvasTexture } from '../core/textures.js';
 import { GARDA, gardaHeight, farHeight, landcover, landClass } from './garda.js';
+import { BakedShadows } from './shadows.js';
 
 const M = GARDA.meta;
 const RH = M.runway.heading;
@@ -75,7 +76,9 @@ function runwayMask(x, z) {
 
 export class Terrain {
   constructor({ quality = 'medium' } = {}) {
-    const N = quality === 'low' ? 400 : quality === 'high' ? 900 : 640;
+    const N = quality === 'low' ? 400 : quality === 'high' ? 1280 : 640;
+    this.nR1 = createNoise2D(311);
+    this.nR2 = createNoise2D(517);
     this.N = N;
     this.xs = gridCoords(N, WORLD.half, 0.55);
     this.zs = this.xs;
@@ -90,6 +93,17 @@ export class Terrain {
   // altitudine reale con la zona dell'aeroporto spianata
   height(x, z) {
     let h = gardaHeight(x, z);
+    // micro-rilievo sulle pareti e sui pendii ripidi: il rilievo a 30 m è troppo liscio per la roccia
+    if (h > 4) {
+      const e = 22;
+      const sl = Math.hypot(gardaHeight(x + e, z) - gardaHeight(x - e, z), gardaHeight(x, z + e) - gardaHeight(x, z - e)) / (2 * e);
+      if (sl > 0.4) {
+        const w = smoothstep(0.4, 1.1, sl);
+        const rid = 1 - Math.abs(this.nR1(x / 41, z / 41));
+        const rid2 = 1 - Math.abs(this.nR2(x / 15, z / 15));
+        h += w * (4.2 * (rid * rid - 0.35) + 1.6 * (rid2 * rid2 - 0.35));
+      }
+    }
     const m = runwayMask(x, z);
     if (m > 0) h = lerp(h, WORLD.runway.elev, m);
     return h;
@@ -162,7 +176,7 @@ export class Terrain {
   }
 
   // -------------------------------------------------------------------------
-  buildMesh(fireAtlas, overlay = null) {
+  buildMesh(fireAtlas, overlay = null, shadows = null) {
     const N = this.N, S = WORLD.half;
     const nv = N * N + 4 * N; // griglia + bordo abbassato ("gonna" contro le fessure con l'anello lontano)
     const pos = new Float32Array(nv * 3);
@@ -221,7 +235,7 @@ export class Terrain {
     this.forestGrid = forest;
     geo.computeBoundingSphere();
 
-    const mat = createTerrainMaterial(fireAtlas, overlay);
+    const mat = createTerrainMaterial(fireAtlas, overlay, shadows);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     mesh.name = 'terrain';
@@ -315,7 +329,7 @@ function terrainTextures() {
   return _terrainTextures;
 }
 
-function createTerrainMaterial(fireAtlas, overlay = null) {
+function createTerrainMaterial(fireAtlas, overlay = null, shadows = null) {
   const { noiseTex, crownNormal } = terrainTextures();
   // immagine Sentinel-2 come colore di base (sRGB)
   const sat = new THREE.Texture(GARDA.satellite);
@@ -337,6 +351,8 @@ function createTerrainMaterial(fireAtlas, overlay = null) {
     tOvC: { value: overlay ? overlay.cls.texture : null },
     ovRectG: { value: overlay ? overlay.rects[0] : new THREE.Vector4(0, 0, 0, 0) },
     ovRectH: { value: overlay ? overlay.rects[1] : new THREE.Vector4(0, 0, 0, 0) },
+    tChm: { value: overlay && overlay.chmTex ? overlay.chmTex : null },
+    chmRect: { value: overlay && overlay.chmTex ? overlay.rects[1] : new THREE.Vector4(0, 0, 0, 0) },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
@@ -385,6 +401,8 @@ function createTerrainMaterial(fireAtlas, overlay = null) {
         uniform sampler2D tOvG;
         uniform sampler2D tOvH;
         uniform sampler2D tOvC;
+        uniform sampler2D tChm;
+        uniform vec4 chmRect;
         uniform vec4 ovRectG;
         uniform vec4 ovRectH;
         float tFor = 0.0;
@@ -406,13 +424,30 @@ function createTerrainMaterial(fireAtlas, overlay = null) {
           // colore reale dal satellite (già lineare), leggermente meno saturo e più chiaro
           vec3 col = diffuseColor.rgb;
           float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-          col = mix(vec3(lum), col, 0.85) * 1.02;
+          // come nelle foto aeree: colori più spenti e leggermente freddi
+          col = mix(vec3(lum), col, 0.68) * vec3(0.99, 1.0, 1.03);
           // dettagli da vicino: variazioni del suolo e chiome degli alberi
           col *= mix(1.0, 0.84 + 0.32 * nA.r, nearF);
           float crown = texture2D(tNoise, p / 23.0).b;
           float crown2 = texture2D(tNoise, p / 9.0 + 0.5).b;
           tFor = smoothstep(0.3, 0.75, vForest + (nB.g - 0.5) * 0.2);
           col *= mix(1.0, 0.62 + 0.55 * (crown * 0.7 + crown2 * 0.4), tFor * nearF);
+          // chioma reale a 1 m (Meta/WRI): sagoma di boschi, radure, filari e giardini; più alta = più scura
+          if (chmRect.w > 0.5) {
+            vec2 uc = (p - chmRect.xy) * chmRect.z;
+            if (uc.x > 0.0 && uc.y > 0.0 && uc.x < 1.0 && uc.y < 1.0) {
+              vec4 ch = texture2D(tChm, uc);
+              float ce = smoothstep(0.0, 0.015, min(min(uc.x, uc.y), min(1.0 - uc.x, 1.0 - uc.y)));
+              float cov = smoothstep(6.0 / 255.0, 26.0 / 255.0, ch.r);
+              float ht = ch.r * 63.75;
+              float cr1 = texture2D(tNoise, p / 5.5 + 0.13).b, cr2 = texture2D(tNoise, p / 2.3 + 0.61).b;
+              vec3 can = mix(vec3(0.07, 0.088, 0.058), vec3(0.036, 0.05, 0.04), smoothstep(3.0, 22.0, ht));
+              can *= 0.55 + 0.9 * (cr1 * 0.65 + cr2 * 0.45);
+              float cw = cov * ce * (1.0 - smoothstep(1500.0, 4200.0, camD));
+              col = mix(col, can, cw * 0.9);
+              tFor = mix(tFor, cov, ce);
+            }
+          }
           // pareti ripide: la foto dall'alto lì è "stirata"; si usa il colore medio della zona
           // con una roccia proiettata sui tre assi (strati e venature del calcare)
           float steep = smoothstep(0.32, 0.62, slope);
@@ -502,6 +537,7 @@ function createTerrainMaterial(fireAtlas, overlay = null) {
         }`,
       );
   };
+  if (shadows) shadows.attach(mat);
   return mat;
 }
 

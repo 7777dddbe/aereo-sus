@@ -8,6 +8,7 @@ import { Towns } from './world/towns.js';
 import { loadOsm } from './world/osm.js';
 import { DetailOverlay } from './world/overlay.js';
 import { Harbor } from './world/harbor.js';
+import { BakedShadows } from './world/shadows.js';
 import { Vegetation } from './world/vegetation.js';
 import { Water } from './world/water.js';
 import { FireSystem } from './world/fires.js';
@@ -38,13 +39,17 @@ const stored = (k) => {
     return null; // archiviazione non disponibile (navigazione privata, iframe)
   }
 };
+// Dettaglio massimo su qualsiasi dispositivo. Solo per diagnosi: aggiungere #bassa all'indirizzo.
+const FORCE_LOW = location.hash.includes('bassa');
 const settings = {
-  quality: stored('quality') || (matchMedia('(pointer: coarse)').matches ? 'low' : 'medium'),
+  quality: FORCE_LOW ? 'low' : 'high',
   start: stored('start') || 'air',
   wind: stored('wind') || 'moderate',
 };
 try {
-  for (const k of ['quality', 'start', 'wind']) $(k + 'Sel').value = settings[k];
+  for (const k of ['start', 'wind']) $(k + 'Sel').value = settings[k];
+  $('qualitySel').value = 'high';
+  $('qualitySel').disabled = true;
 } catch (e) {
   /* menu non disponibile */
 }
@@ -176,11 +181,11 @@ const requestRestart = () => {
 };
 
 $('startBtn').addEventListener('click', async () => {
-  settings.quality = $('qualitySel').value;
+  settings.quality = FORCE_LOW ? 'low' : 'high';
   settings.start = $('startSel').value;
   settings.wind = $('windSel').value;
   try {
-    for (const k of ['quality', 'start', 'wind']) localStorage.setItem('cl415.' + k, settings[k]);
+    for (const k of ['start', 'wind']) localStorage.setItem('cl415.' + k, settings[k]);
   } catch (e) {
     /* archiviazione non disponibile */
   }
@@ -228,7 +233,7 @@ async function build() {
     reverseDepthBuffer: clip,
     logarithmicDepthBuffer: !clip,
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q === 'high' ? 2 : q === 'low' ? 1 : 1.25));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q === 'high' ? 2 : 1));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.52;
@@ -259,21 +264,30 @@ async function build() {
   await step('Strade, campi, vigneti e uliveti (OpenStreetMap)…');
   const overlay = new DetailOverlay({ quality: q });
   terrain.overlay = overlay;
-  scene.add(terrain.buildMesh(fires.fireAtlas, overlay));
+  await step('Ombre del sole: montagne, case e alberi…');
+  const shadows = new BakedShadows();
+  await shadows.bake(env.sunDir);
+  scene.add(terrain.buildMesh(fires.fireAtlas, overlay, shadows));
   scene.add(terrain.buildFarMesh());
   await step('Aeroporto e rampa idrovolanti…');
   const airfield = buildAirfield(terrain);
   scene.add(airfield);
   await step('Vegetazione…');
   const veg = new Vegetation(terrain, scene, { quality: q });
-  veg.meshes.forEach((m) => m.layers.set(1));
+  veg.meshes.forEach((m) => {
+    m.layers.set(1);
+    shadows.attach(m.material);
+  });
   veg.burnFn = (x, z) => fires.burntAt(x, z);
   await step('Lago con riflessi…');
-  const water = new Water({ terrain, sunDir: env.sunDir, quality: q, renderer });
+  const water = new Water({ terrain, sunDir: env.sunDir, quality: q, renderer, shadows });
   scene.add(water.mesh);
   scene.add(water.buildUpperLakes());
   await step('Paesi: Riva, Arco, Limone, Malcesine…');
   const towns = new Towns(scene, terrain, { quality: q });
+  towns.group.traverse((o) => {
+    if (o.isMesh) shadows.attach(o.material);
+  });
   await step('Porti, moli, barche e traghetti…');
   const harbor = new Harbor(scene, terrain, { quality: q });
   await step('Canadair CL-415: fusoliera, ali, livrea…');
@@ -310,7 +324,7 @@ async function build() {
       post = null; // si torna al rendering diretto
     }
   }
-  G = { harbor, towns, post, renderer, scene, camera, env, terrain, fires, veg, water, model, cockpit, world, fm, sys, fx, input, rig, hud, paused: true, time: 0, crashShown: false, airfield };
+  G = { shadows, harbor, towns, post, renderer, scene, camera, env, terrain, fires, veg, water, model, cockpit, world, fm, sys, fx, input, rig, hud, paused: true, time: 0, crashShown: false, airfield };
   fires.start();
   restart(settings.start);
   await step('Pronto.');

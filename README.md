@@ -31,7 +31,7 @@ Pesca l'acqua dal **Lago di Garda nord** (ricostruito dal vero: Riva, Torbole, L
 - 💨 Vento: l'"Ora" da sud, tipica dei pomeriggi del Garda.
 - 🔁 Per rigenerare i dati: `npm run garda` (terreno, satellite) e `NODE_USE_ENV_PROXY=1 node tools/garda/overture.mjs` (edifici, strade, campi).
 
-**Crediti dei dati**: Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito del programma Copernicus dall'Unione Europea e dall'ESA · © ESA WorldCover project 2021, contiene dati Copernicus Sentinel modificati (2021) elaborati dal consorzio ESA WorldCover (CC BY 4.0) · contiene dati Copernicus Sentinel modificati (2024) · edifici, strade, uso del suolo, acque e moli: © OpenStreetMap contributors (ODbL), distribuiti da Overture Maps Foundation.
+**Crediti dei dati**: altezza della vegetazione a 1 m © Meta e World Resources Institute, High Resolution Canopy Height Maps (CC BY 4.0) · Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, fornito nell'ambito del programma Copernicus dall'Unione Europea e dall'ESA · © ESA WorldCover project 2021, contiene dati Copernicus Sentinel modificati (2021) elaborati dal consorzio ESA WorldCover (CC BY 4.0) · contiene dati Copernicus Sentinel modificati (2024) · edifici, strade, uso del suolo, acque e moli: © OpenStreetMap contributors (ODbL), distribuiti da Overture Maps Foundation.
 
 ## 🎮 Comandi principali
 

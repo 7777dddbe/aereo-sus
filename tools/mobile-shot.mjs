@@ -7,9 +7,8 @@ const b = await pw.chromium.launch({ args: ['--use-gl=angle', '--use-angle=swift
 const ctx = await b.newContext({ viewport: { width: +w, height: +h }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
 const p = await ctx.newPage();
 p.on('pageerror', (e) => console.log('PAGEERROR', e.message));
-await p.goto('file://' + path.resolve('index.html') + '#test');
+await p.goto('file://' + path.resolve('index.html') + '#test' + ('low' === 'high' ? '' : '-bassa'));
 await p.screenshot({ path: out + '_menu.png' });
-await p.selectOption('#qualitySel', 'low');
 await p.click('#startBtn');
 await p.waitForFunction(() => window.__cl415 && document.getElementById('loading').style.display === 'none', null, { timeout: 300000 });
 await p.evaluate(() => window.__advance(1.5, 30));

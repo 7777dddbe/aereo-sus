@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { OSM } from './osm.js';
 import { WORLD } from './terrain.js';
+import { GARDA } from './garda.js';
 
 // larghezza (m) e colori per classe di strada
 const ROADS = {
@@ -14,6 +15,8 @@ const ROADS = {
   7: [5.5, '#606263'], 8: [5, '#646566'], 9: [4, '#67686a'], 10: [4, '#b4ab9c'], 11: [2.6, '#7d7262'], 12: [1.2, '#9a8f7c'],
   13: [2.5, '#9d5b4c'], 20: [4.5, '#6a625a'],
 };
+// terreno naturale: 1 spiagge e ghiaia, 2 roccia, 3 ghiaione
+const NATURAL = { 1: ['#d9d5c8', 0.92], 2: ['#a7a398', 0.5], 3: ['#b9b4a8', 0.55] };
 // uso del suolo: [colore, opacità, motivo]
 const LAND = {
   1: ['#56652c', 0.42, 'rows'], 2: ['#5a6b33', 0.38, 'dots'], 3: ['#8b8a55', 0.22], 4: ['#6c8a3c', 0.2], 5: ['#a79d8d', 0.1],
@@ -59,6 +62,18 @@ export class DetailOverlay {
     const hz = { x0: -1700, z0: -11500, size: 7800 };
     this.hires = this._paint(hz, quality === 'low' ? 2048 : quality === 'high' ? 4096 : 3072, true);
     this.cls = this._classes(hz, quality === 'low' ? 1024 : 2048);
+    // altezza e copertura delle chiome (1 m, Meta/WRI) nella zona ad alta risoluzione
+    this.chmTex = null;
+    if (GARDA.chm) {
+      const n = GARDA.chm.N;
+      const t = new THREE.DataTexture(new Uint8Array(GARDA.chm.data.buffer.slice(GARDA.chm.data.byteOffset, GARDA.chm.data.byteOffset + n * n * 4)), n, n, THREE.RGBAFormat);
+      t.magFilter = THREE.LinearFilter;
+      t.minFilter = THREE.LinearFilter;
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      t.needsUpdate = true;
+      this.chmTex = t;
+      this.chm = { data: GARDA.chm.data, N: n, x0: hz.x0, z0: hz.z0, size: hz.size };
+    }
     this.rects = [new THREE.Vector4(-half, -half, 1 / (2 * half), 1), new THREE.Vector4(hz.x0, hz.z0, 1 / hz.size, 1)];
     this._mask(quality);
   }
@@ -84,10 +99,30 @@ export class DetailOverlay {
       drawPoly(g, f.pts, T);
       g.fill();
     }
-    // acque: il Sarca e i torrenti
+    // rocce, ghiaioni, spiagge e ghiaia di riva
+    for (const f of OSM.natural) {
+      const L = NATURAL[f.cls];
+      if (!L || !inR(f.pts)) continue;
+      g.globalAlpha = L[1];
+      g.fillStyle = L[0];
+      drawPoly(g, f.pts, T);
+      g.fill();
+    }
+    // acque: il Sarca, i torrenti e le piscine
     for (const f of OSM.water) {
       if (!inR(f.pts)) continue;
       g.globalAlpha = 0.95;
+      if (f.cls === 5) {
+        if (!hi) continue;
+        drawPoly(g, f.pts, T);
+        g.fillStyle = '#3fb0d6';
+        g.fill();
+        g.globalAlpha = 0.85;
+        g.strokeStyle = '#e8eef0';
+        g.lineWidth = Math.max(0.8, 0.9 * k);
+        g.stroke();
+        continue;
+      }
       if (f.flag) {
         g.strokeStyle = '#2c4f52';
         g.lineWidth = Math.max(1, (f.cls === 1 ? 10 : f.cls === 3 ? 5 : 3) * k);
@@ -224,6 +259,12 @@ export class DetailOverlay {
       drawLine(g, f.pts, T);
       g.stroke();
     }
+    for (const f of OSM.natural) {
+      if (f.cls !== 1) continue;
+      g.fillStyle = '#ff0000';
+      drawPoly(g, f.pts, T);
+      g.fill();
+    }
     for (const f of OSM.water) {
       if (f.flag) {
         g.lineWidth = Math.max(1, 8 * k);
@@ -237,6 +278,17 @@ export class DetailOverlay {
     this.maskData = g.getImageData(0, 0, N, N).data;
     this.maskN = N;
     this.maskK = k;
+  }
+
+  // altezza (m) e copertura (0-1) della chioma nel punto, oppure null fuori dalla zona
+  chmAt(x, z) {
+    const C = this.chm;
+    if (!C) return null;
+    const i = Math.floor(((x - C.x0) / C.size) * C.N), j = Math.floor(((z - C.z0) / C.size) * C.N);
+    if (i < 0 || j < 0 || i >= C.N || j >= C.N) return null;
+    const k = (j * C.N + i) * 4;
+    const v = C.data[k];
+    return { h: v / 4, cov: Math.max(0, Math.min(1, (v - 8) / 20)) };
   }
 
   // 0..255 per canale: 0 = blocco, 1 = frutteto/uliveto, 2 = vigneto

@@ -8,6 +8,7 @@ import landcoverUrl from './garda/landcover.png';
 import satelliteUrl from './garda/satellite.jpg';
 import farUrl from './garda/far.png';
 import buildingsBin from './garda/buildings.bin';
+import chmUrl from './garda/chm.png';
 
 export const GARDA = {
   meta,
@@ -18,6 +19,7 @@ export const GARDA = {
   satellite: null, // HTMLImageElement
   landcoverImage: null,
   buildings: null, // { count, data: Int16/Uint8 views }
+  chm: null, // { data RGBA (R = altezza chioma * 4, G = copertura) } sulla zona meta.chm
   ready: false,
 };
 
@@ -84,6 +86,10 @@ export async function loadGarda() {
     GARDA.farClass[k] = fp.data[k * 4 + 2];
   }
   GARDA.satellite = sat;
+  if (M.chm) {
+    const cp = await pixels(chmUrl);
+    GARDA.chm = { data: cp.data, N: cp.w };
+  }
   GARDA.landcoverImage = await image(landcoverUrl);
   const b = buildingsBin;
   const n = Math.floor(b.byteLength / 8);

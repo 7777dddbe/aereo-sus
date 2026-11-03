@@ -13,9 +13,8 @@ const mk = async (name) => {
   const p = await ctx.newPage();
   p.on('pageerror', (e) => console.log(name, 'PAGEERROR', e.message));
   p.on('console', (m) => { if (m.type() === 'error') console.log(name, 'console.error', m.text().slice(0, 200)); });
-  await p.goto('file://' + path.resolve('index.html') + '#test');
+  await p.goto('file://' + path.resolve('index.html') + '#test' + ('low' === 'high' ? '' : '-bassa'));
   await p.waitForFunction(() => document.getElementById('mpBox').style.display === 'block');
-  await p.selectOption('#qualitySel', 'low');
   return p;
 };
 const A = await mk('A'), B = await mk('B');

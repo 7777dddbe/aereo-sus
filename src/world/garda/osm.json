@@ -2,8 +2,8 @@
  "release": "release/2026-10-21.0/",
  "buildings": 33092,
  "roads": 23977,
- "land": 18980,
- "water": 1551,
+ "land": 18674,
+ "water": 2439,
  "infra": 1310,
- "bytes": 1687435
+ "bytes": 1904278
 }

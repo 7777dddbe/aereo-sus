@@ -11,8 +11,9 @@ import { WORLD } from './terrain.js';
 import { createNoise2D } from '../core/math.js';
 
 const WALLS = [0xe3c48c, 0xeadfc6, 0xdfae98, 0xefece4, 0xe8d39a, 0xd59d6f, 0xf0e2c8, 0xcfc2ae, 0xe6cfa8, 0xd8b48a];
-const ROOFS = [0xa4502f, 0x8f4428, 0xb35d38, 0x7a3c27, 0x9a5638, 0xa8603e];
-const FLATS = [0xc9cbcc, 0xa8acae, 0xd6d4ce, 0x8e9294, 0xb9b4aa];
+// coppi come si vedono dall'alto: terracotta sbiadita, rosata o bruna (dalle foto aeree di Riva e Torbole)
+const ROOFS = [0xb4604c, 0xa9553f, 0xc06b55, 0x9d5a47, 0xb9705c, 0x8a5646, 0xc47a5f, 0x7f4f42, 0xa6644f, 0xb0705f];
+const FLATS = [0xc9cbcc, 0xa8acae, 0xd6d4ce, 0x8e9294, 0xb9b4aa, 0x6c6f72, 0x5d6063, 0xdad8d2];
 
 function wallGeometry() {
   const g = new THREE.BoxGeometry(1, 1, 1, 1, 4, 1);
@@ -90,6 +91,40 @@ const polyArea = (pts) => {
   for (let i = 0, j = n - 1; i < n; j = i++) s += (pts[j * 2] + pts[i * 2]) * (pts[j * 2 + 1] - pts[i * 2 + 1]);
   return Math.abs(s / 2);
 };
+
+// tetto: la scheda grafica disegna le file di coppi (visibili entro ~200 m); da lontano resta il colore medio
+function roofMaterial() {
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLoc;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vLoc = position * vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+        #else
+          vLoc = position;
+        #endif`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vLoc;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          float fadeT = 1.0 - smoothstep(70.0, 260.0, length(vViewPosition));
+          float row = floor(vLoc.z / 0.38);
+          float fz = fract(vLoc.z / 0.38);
+          float fx = fract(vLoc.x / 0.27 + row * 0.5);
+          float course = 1.0 - 0.34 * (1.0 - smoothstep(0.0, 0.16, fz)) - 0.12 * (1.0 - smoothstep(0.0, 0.1, fx));
+          float tint = 0.9 + 0.2 * fract(sin(dot(vec2(floor(vLoc.x / 0.27 + row * 0.5), row), vec2(12.9898, 78.233))) * 43758.5453);
+          diffuseColor.rgb *= mix(0.9, course * tint, fadeT);
+        }`,
+      );
+  };
+  return m;
+}
 
 export class Towns {
   constructor(scene, terrain, { quality = 'medium' } = {}) {
@@ -197,7 +232,7 @@ export class Towns {
     });
     // casette istanziate
     const wallMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0 });
-    const roofMat = new THREE.MeshStandardMaterial({ roughness: 0.78, metalness: 0 });
+    const roofMat = roofMaterial();
     const walls = new THREE.InstancedMesh(wallGeometry(), wallMat, simple.length);
     const roofs = new THREE.InstancedMesh(roofGeometry(), roofMat, simple.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();

@@ -136,6 +136,7 @@ async function readType(type, columns, filter) {
     return JSON.parse(fs.readFileSync(cf, 'utf8'));
   }
   let nk = 0;
+  const hist = {};
   const only = process.env.ONLY ? [keys[Number(process.env.ONLY)]] : keys;
   for (const k of only) {
     nk++;
@@ -156,6 +157,7 @@ async function readType(type, columns, filter) {
         for (const r of rows) {
           const b = r.bbox;
           if (!b || b.xmin > BOX.x1 || b.xmax < BOX.x0 || b.ymin > BOX.y1 || b.ymax < BOX.y0) continue;
+          if (process.env.CLASSES) hist[`${r.subtype}/${r.class}`] = (hist[`${r.subtype}/${r.class}`] || 0) + 1;
           const g = asGeo(r.geometry);
           if (!g) continue;
           const rec = filter(r, g);
@@ -169,6 +171,7 @@ async function readType(type, columns, filter) {
       row += nrows;
     }
   }
+  if (process.env.CLASSES) console.log('classi', type, JSON.stringify(Object.entries(hist).sort((a, b) => b[1] - a[1]).slice(0, 40)));
   fs.writeFileSync(cf, JSON.stringify(out));
   return out;
 }
@@ -299,7 +302,7 @@ log('uso del suolo:', land.flat().length);
 // acqua: fiumi e torrenti (il Garda e i laghi ci sono già)
 const water = await readType('theme=base/type=water', ['subtype', 'class'], (r, g) => {
   const res = [];
-  const cls = r.subtype === 'river' || r.class === 'river' ? 1 : r.class === 'stream' || r.subtype === 'stream' ? 2 : r.class === 'canal' ? 3 : r.subtype === 'lake' || r.subtype === 'pond' || r.subtype === 'reservoir' ? 4 : 0;
+  const cls = r.class === 'swimming_pool' ? 5 : r.subtype === 'river' || r.class === 'river' ? 1 : r.class === 'stream' || r.subtype === 'stream' ? 2 : r.class === 'canal' ? 3 : r.subtype === 'lake' || r.subtype === 'pond' || r.subtype === 'reservoir' ? 4 : 0;
   if (!cls) return null;
   if (g.type === 'LineString' || g.type === 'MultiLineString') {
     const lines = g.type === 'LineString' ? [g.coordinates] : g.coordinates;
@@ -310,13 +313,29 @@ const water = await readType('theme=base/type=water', ['subtype', 'class'], (r, 
   } else {
     const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
     for (const p of polys) {
-      const ring = dp(ringW(p[0]), 1.0);
-      if (ring.length >= 4 && inside(ring) && Math.abs(area(ring)) > 100 && Math.abs(area(ring)) < 3e6) res.push({ cls, line: false, pts: ring.map(([x, z]) => [Math.round(x * 2), Math.round(z * 2)]) });
+      const ring = dp(ringW(p[0]), cls === 5 ? 0.3 : 1.0);
+      if (ring.length >= 4 && inside(ring) && Math.abs(area(ring)) > (cls === 5 ? 6 : 100) && Math.abs(area(ring)) < 3e6) res.push({ cls, line: false, pts: ring.map(([x, z]) => [Math.round(x * 2), Math.round(z * 2)]) });
     }
   }
   return res.length ? res : null;
 });
 log('acque:', water.flat().length);
+
+// terreno naturale: spiagge, rocce, ghiaioni, pareti
+const LANDN = { beach: 1, sand: 1, shingle: 1, gravel: 1, bare_rock: 2, rock: 2, cliff: 2, scree: 3, glacier: 4, reef: 5, wetland: 6, shrub: 7, scrub: 7, heath: 7 };
+const landN = await readType('theme=base/type=land', ['subtype', 'class'], (r, g) => {
+  const c = LANDN[r.class] || LANDN[r.subtype];
+  if (!c) return null;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+  const res = [];
+  for (const p of polys) {
+    const ring = dp(ringW(p[0]), 1.2);
+    if (ring.length < 4 || !inside(ring) || Math.abs(area(ring)) < 60) continue;
+    res.push({ cls: c, ring: ring.map(([x, z]) => [Math.round(x * 2), Math.round(z * 2)]) });
+  }
+  return res.length ? res : null;
+});
+log('terreno naturale:', landN.flat().length);
 
 // infrastrutture: moli, dighe foranee, banchine, ponti
 const infra = await readType('theme=base/type=infrastructure', ['subtype', 'class'], (r, g) => {
@@ -393,6 +412,7 @@ section(1, bl, (b) => {
 section(2, roadsKept, (r) => ({ cls: r.cls, extra: 0, flag: r.bridge ? 1 : 0, pts: r.pts }));
 section(3, landKept, (l) => ({ cls: l.cls, extra: 0, flag: 0, pts: l.ring }));
 section(4, water.flat(), (w) => ({ cls: w.cls, extra: 0, flag: w.line ? 1 : 0, pts: w.pts }));
+section(6, landN.flat(), (l) => ({ cls: l.cls, extra: 0, flag: 0, pts: l.ring }));
 section(5, infra.flat(), (w) => ({ cls: w.cls, extra: 0, flag: w.line ? 1 : 0, pts: w.pts }));
 const buf = Buffer.concat(chunks);
 fs.writeFileSync(path.join(OUT, 'osm.bin'), buf);

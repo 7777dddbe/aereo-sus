@@ -260,7 +260,8 @@ for (let j = 0; j < NH; j++) {
     let h = sampleBil(dem, lon, lat) - LAKE_MSL;
     const L = lakeAround(x, z, 1);
     if (L.frac >= 0.5) {
-      const depth = Math.min(3 + L.d * 0.55, 140);
+      // fondale graduale: fascia bassa di ghiaia di una settantina di metri (turchese), poi la scarpata
+      const depth = L.d < 70 ? 0.5 + L.d * 0.1 : Math.min(7.5 + (L.d - 70) * 0.9, 140);
       h = -depth;
     } else {
       // la terra non scende mai sotto il pelo dell'acqua (spiagge e moli a 0,3-1 m)

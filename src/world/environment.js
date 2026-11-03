@@ -54,7 +54,7 @@ export class Environment {
     this.sun = sun;
 
     // Luce del cielo + rimbalzo del terreno
-    const hemi = new THREE.HemisphereLight(0xbdd0e2, 0x5c5240, 0.42);
+    const hemi = new THREE.HemisphereLight(0xc3d4e6, 0x6a604c, 0.66);
     scene.add(hemi);
     this.hemi = hemi;
 
@@ -94,7 +94,7 @@ export class Environment {
     const rt = pmrem.fromScene(envScene, 0, 0.1, 2000);
     this.envMap = rt.texture;
     this.scene.environment = this.envMap;
-    this.scene.environmentIntensity = 0.55;
+    this.scene.environmentIntensity = 0.7;
     pmrem.dispose();
   }
 

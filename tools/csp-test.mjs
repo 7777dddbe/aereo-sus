@@ -7,8 +7,7 @@ const b = await pw.chromium.launch({ args: ['--use-gl=angle', '--use-angle=swift
 const p = await b.newPage({ viewport: { width: 960, height: 540 } });
 p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('[console]', m.type(), m.text().slice(0, 300)); });
 p.on('pageerror', (e) => console.log('[pageerror]', e.message));
-await p.goto(url + '#test');
-await p.selectOption('#qualitySel', process.argv[3] || 'low');
+await p.goto(url + '#test' + ((process.argv[3] || 'low') === 'high' ? '' : '-bassa'));
 await p.click('#startBtn');
 try {
   await p.waitForFunction(() => window.__cl415 && document.getElementById('loading').style.display === 'none', null, { timeout: 90000 });

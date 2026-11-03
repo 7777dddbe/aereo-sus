@@ -6,8 +6,7 @@ const b = await pw.chromium.launch({ args: ['--use-gl=angle', '--use-angle=swift
 const p = await b.newPage({ viewport: { width: 960, height: 540 } });
 p.on('pageerror', (e) => console.log('[pageerror]', e.message));
 p.on('console', (m) => { const t = m.text(); if (m.type() === 'error' || t.startsWith('[carico]')) console.log('[console]', t.slice(0, 300)); });
-await p.goto('file://' + process.cwd() + '/index.html#test');
-await p.selectOption('#qualitySel', process.argv[2] || 'low');
+await p.goto('file://' + process.cwd() + '/index.html#test' + ((process.argv[2] || 'low') === 'high' ? '' : '-bassa'));
 await p.click('#startBtn');
 const t0 = Date.now();
 let last = '';

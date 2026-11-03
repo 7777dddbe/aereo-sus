@@ -3,7 +3,7 @@
 
 import osmBin from './garda/osm.bin';
 
-export const OSM = { buildings: [], roads: [], land: [], water: [], infra: [], ready: false };
+export const OSM = { buildings: [], roads: [], land: [], water: [], infra: [], natural: [], ready: false };
 
 export function loadOsm() {
   if (OSM.ready) return OSM;
@@ -24,7 +24,7 @@ export function loadOsm() {
     return v >>> 0;
   };
   const unzz = (v) => (v >>> 1) ^ -(v & 1);
-  const names = { 1: 'buildings', 2: 'roads', 3: 'land', 4: 'water', 5: 'infra' };
+  const names = { 1: 'buildings', 2: 'roads', 3: 'land', 4: 'water', 5: 'infra', 6: 'natural' };
   while (o + 5 <= b.byteLength) {
     const type = dv.getUint8(o);
     const n = dv.getUint32(o + 1, true);

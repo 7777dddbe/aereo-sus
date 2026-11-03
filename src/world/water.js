@@ -6,6 +6,7 @@ import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { waterNormalTexture, dataTextureFromChannels, tileableNoise } from '../core/textures.js';
 import { WORLD } from './terrain.js';
 import { landcover } from './garda.js';
+import { BakedShadows } from './shadows.js';
 
 // Onde del lago (fisica + grafica). Ampiezza modesta (lago, vento 8-12 kt).
 export class Waves {
@@ -26,7 +27,7 @@ export class Waves {
 }
 
 export class Water {
-  constructor({ terrain, sunDir, quality = 'medium', renderer }) {
+  constructor({ terrain, sunDir, quality = 'medium', renderer, shadows = null }) {
     this.waves = new Waves();
     const B = WORLD.lake.box;
     const sizeX = B.x1 - B.x0, sizeZ = B.z1 - B.z0;
@@ -69,12 +70,13 @@ export class Water {
         sunDir: { value: sunDir.clone() },
         sunColor: { value: new THREE.Color(1.0, 0.93, 0.82).multiplyScalar(3.2) },
         skyColor: { value: new THREE.Color(0.32, 0.45, 0.6) },
-        deepColor: { value: new THREE.Color(0.006, 0.03, 0.035) },
-        shallowColor: { value: new THREE.Color(0.06, 0.13, 0.11) },
+        deepColor: { value: new THREE.Color(0.012, 0.05, 0.11) },
+        shallowColor: { value: new THREE.Color(0.075, 0.27, 0.30) },
         windDir: { value: new THREE.Vector2(0.86, 0.5) },
         fogColor: { value: new THREE.Color(0.6, 0.68, 0.75) },
         fogDensity: { value: 0.00005 },
         reflStrength: { value: 1.0 },
+        ...(shadows ? shadows.uniforms : {}),
       },
       vertexShader: /* glsl */ `
         uniform mat4 textureMatrix;
@@ -105,6 +107,7 @@ export class Water {
         uniform vec3 fogColor;
         uniform float fogDensity;
         uniform float reflStrength;
+        ${shadows ? BakedShadows.GLSL_DECL : ''}
         varying vec4 vUvRefl;
         varying vec3 vWorldPos;
         #include <common>
@@ -144,18 +147,21 @@ export class Water {
           F = mix(F, 1.0, smoothstep(2500.0, 9000.0, dist) * 0.35);
 
           // colore del corpo d'acqua (diffusione sotto superficie verso il sole)
-          float shallow = exp(-depth * 0.35);
+          float shallow = exp(-depth * 0.22);
           vec3 body = mix(deepColor, shallowColor, shallow);
           float sss = pow(max(dot(V, -sunDir) * 0.5 + 0.5, 0.0), 3.0) * 0.6 + 0.4;
           body *= sss * (0.6 + 0.4 * max(sunDir.y, 0.0));
           body += skyColor * 0.025;
 
+          ${shadows ? 'float wsh = mix(1.0, bakedShade(vWorldPos), 0.55);' : 'float wsh = 1.0;'}
+          body *= wsh;
           vec3 col = mix(body, refl * reflStrength, F);
+          col *= mix(1.0, wsh, 0.6);
 
           // riflesso speculare del sole
           vec3 H = normalize(sunDir + V);
           float spec = pow(max(dot(N, H), 0.0), 700.0) * 5.0 + pow(max(dot(N, H), 0.0), 80.0) * 0.1;
-          col += sunColor * spec * (0.3 + 0.7 * F);
+          col += sunColor * spec * (0.3 + 0.7 * F) * wsh;
 
           // schiuma della riva
           float fnz = texture2D(tFoam, p / 7.0 + uTime * 0.02).r;
