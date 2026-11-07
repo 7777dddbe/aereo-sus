@@ -50,6 +50,7 @@ export class CameraRig {
   }
 
   lookReset() {
+    this.zoom = 1;
     this.head.tyaw = 0;
     this.head.tpitch = -0.17;
   }
@@ -59,7 +60,13 @@ export class CameraRig {
     const id = this.id;
     const q = fm.quat;
     const o = fm.out;
-    if (look.wheel) this.zoom = clamp(this.zoom * (look.wheel > 0 ? 1.12 : 0.89), 0.25, 3.5);
+    // zoom: nelle visuali a distanza (inseguimento, orbita) cambia la distanza, nelle altre l'angolo di campo.
+    // Rotella: come prima. Pizzica (telefono): dita che si allargano = ingrandisce.
+    const farCam = id === 'chase' || id === 'orbit';
+    const zMin = farCam ? 0.25 : 0.55; // angolo di campo massimo ~130°: oltre la prospettiva si deforma
+    if (look.wheel) this.zoom = clamp(this.zoom * (look.wheel > 0 ? 1.12 : 0.89), zMin, 3.5);
+    if (look.pinch && look.pinch !== 1) this.zoom = clamp(this.zoom * (farCam ? 1 / look.pinch : look.pinch), zMin, 3.5);
+    if (this.zoom < zMin) this.zoom = zMin;
     // vibrazioni (motori, acqua, turbolenza) e scosse
     const water = o.onWater ? clamp(o.gs / 25, 0, 1) * clamp(o.hullDepth * 2, 0.2, 1) : 0;
     const ground = o.onGround ? clamp(o.gs / 30, 0, 1) : 0;

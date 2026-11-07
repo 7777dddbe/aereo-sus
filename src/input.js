@@ -21,6 +21,7 @@ export const KEYMAP = [
   ['C / 1-7', 'Cambia visuale (cabina, inseguimento, orbita, passaggio, sonde, ala, torre)'],
   ['Mouse (muovi)', 'Cloche: su = picchiare, giù = cabrare, lati = rollio (il cerchio al centro è il neutro)'],
   ['Rotella del mouse', 'Manette + / − (al minimo, in acqua o a terra, continua giù = reverse)'],
+  ['Telefono: pizzica con due dita', 'Zoom della visuale · un dito sullo schermo = guardati intorno · doppio tocco = sguardo avanti e zoom normale'],
   ['Tasto destro (trascina) / Shift+rotella', 'Guarda intorno / zoom · doppio clic = sguardo avanti'],
   ['Y', 'Cloche col mouse on/off (spenta: trascina per guardare, rotella = zoom)'],
   ['X', 'Multiplayer: chiedi al compagno di scambiare i ruoli (o guardalo e usa il pulsante)'],
@@ -48,7 +49,8 @@ export class Input {
     // all'avvio o dopo la pausa se il mouse è rimasto lontano dal centro
     this.yokeEngaged = false;
     this.throttleChanged = 0; // istante dell'ultimo cambio manette con la rotella (per l'HUD)
-    this.look = { dx: 0, dy: 0, wheel: 0, dragging: false };
+    this.look = { dx: 0, dy: 0, wheel: 0, pinch: 1, dragging: false };
+    this._tp = new Map(); // dita sul canvas (telefono): id -> posizione
     this.gamepad = null;
     this.touch = { active: false, x: 0, y: 0, throttle: null };
     this._mouse = { x: 0, y: 0 };
@@ -81,6 +83,49 @@ export class Input {
     window.addEventListener('blur', () => this.keys.clear());
     const el = this.dom;
     el.addEventListener('contextmenu', (e) => e.preventDefault());
+    // --- telefono: pizzica = zoom, un dito = sguardo, doppio tocco = azzera ---
+    const tp = this._tp;
+    let lastPinch = 0, lastTap = 0;
+    const pinchDist = () => {
+      const [a, b] = [...tp.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      tp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignora */ }
+      if (tp.size === 2) lastPinch = pinchDist();
+      if (tp.size === 1) {
+        const now = performance.now();
+        if (now - lastTap < 320) this.actions.push('lookReset');
+        lastTap = now;
+      }
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'touch' || !tp.has(e.pointerId)) return;
+      const p = tp.get(e.pointerId);
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (tp.size >= 2) {
+        const d = pinchDist();
+        if (lastPinch > 8 && d > 8) this.look.pinch *= clamp(d / lastPinch, 0.8, 1.25);
+        lastPinch = d;
+      } else if (tp.size === 1) {
+        this.look.dx += dx;
+        this.look.dy += dy;
+        if (Math.abs(dx) + Math.abs(dy) > 6) lastTap = 0; // trascinare non è un doppio tocco
+      }
+    });
+    const lift = (e) => {
+      if (e.pointerType !== 'touch') return;
+      tp.delete(e.pointerId);
+      lastPinch = tp.size === 2 ? pinchDist() : 0;
+    };
+    el.addEventListener('pointerup', lift);
+    el.addEventListener('pointercancel', lift);
+    // Safari iOS: niente zoom della pagina con i gesti
+    for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault());
     el.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') return;
       // con la cloche sul mouse si guarda intorno col tasto destro (o centrale)
@@ -125,8 +170,9 @@ export class Input {
   }
 
   consumeLook() {
-    const l = { dx: this.look.dx, dy: this.look.dy, wheel: this.look.wheel };
+    const l = { dx: this.look.dx, dy: this.look.dy, wheel: this.look.wheel, pinch: this.look.pinch };
     this.look.dx = this.look.dy = this.look.wheel = 0;
+    this.look.pinch = 1;
     return l;
   }
 

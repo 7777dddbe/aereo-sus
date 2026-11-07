@@ -77,6 +77,15 @@ export class HUD {
     this._camT = setTimeout(() => this.camLabel.classList.add('fade'), 1800);
   }
 
+  // etichetta dello zoom mentre si pizzica o si usa la rotella (1,0× = normale)
+  setZoom(z, far) {
+    const x = far ? 1 / z : z; // nelle visuali a distanza zoom alto = lontano
+    this.camLabel.textContent = 'Zoom ' + x.toFixed(1).replace('.', ',') + '×';
+    this.camLabel.classList.remove('fade');
+    clearTimeout(this._camT);
+    this._camT = setTimeout(() => this.camLabel.classList.add('fade'), 900);
+  }
+
   toggleData() {
     this.showData = !this.showData;
     this.data.style.display = this.showData ? '' : 'none';

@@ -331,6 +331,7 @@ async function build() {
   load.style.display = 'none';
   $('hud').style.display = 'block';
   hud.message('Benvenuto a bordo del CL-415. Premi H per i comandi.', 'info', 8);
+  if (matchMedia('(pointer: coarse)').matches) hud.message('🤏 Pizzica con due dita per zoomare · un dito = guardati intorno · doppio tocco = azzera', 'info', 8);
   if (input.mouseYoke) hud.message('🖱️ Porta il mouse nel cerchio al centro per prendere la cloche · rotella = manette · tasto destro = guardati intorno', 'info', 8);
   hud.message('Lago di Garda nord: incendi sul Monte Brione e sopra Limone. Guarda la mappa in alto a destra.', 'warn', 10);
   hud.setCamera(rig.mode);
@@ -577,6 +578,7 @@ function frame(now, doRender = true) {
 
   // telecamera
   const look = input.consumeLook();
+  const zoomBefore = rig.zoom;
   env.windAt(fm.pos.x, fm.pos.y, fm.pos.z, g.time, _wind);
   rig.update(dt, fm, look, {
     eye: cockpit.eye,
@@ -584,6 +586,7 @@ function frame(now, doRender = true) {
     shake: fx.cameraShake,
     turb: env.thermals.length ? 0.5 : 0,
   });
+  if (Math.abs(rig.zoom - zoomBefore) > 0.004) hud.setZoom(rig.zoom, rig.id === 'chase' || rig.id === 'orbit');
 
   if (g.camOverride) g.camOverride(camera); // usato dai test automatici
   // mondo
